@@ -17,7 +17,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, matthews_co
     log_loss
 import os
 from keras import backend as K
-print(K.tensorflow_backend._get_available_gpus())
+# print(K.tensorflow_backend._get_available_gpus())
 
 
 class DNN_MT_simple:
@@ -413,6 +413,8 @@ class DNN_MT_simple:
         self.create_DNN_model()
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
         X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
+        # print(X_train)
+        # print(y_train)
         cv_results = self.cv_fit(X_train,y_train, cv)
         print(cv_results)
         y_train_splt = self.y_splitter(y_train_v2.values)
