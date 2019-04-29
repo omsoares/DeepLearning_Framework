@@ -39,7 +39,7 @@ Test with METABRIC Dataset
 
 º
 # 
-# '''
+# # '''
 # rna_seq = Preprocessing("data_mRNA_median_Zscores.txt","data_clinical_sample.txt", mt=True)
 #
 # # rna_seq.load_data("MB-", "Hugo_Symbol", "ER_STATUS", "PATIENT_ID")
@@ -55,7 +55,7 @@ Test with METABRIC Dataset
 #
 # parameters_batch = {
 #             'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
-#             'optimization': ['SGD', 'Adam', 'RMSprop'],
+#             'optimization': ['Adadelta', 'Adam', 'RMSprop'],
 #             'learning_rate': [0.015, 0.010, 0.005, 0.001],
 #             'batch_size': [16, 32, 64, 128, 256],
 #             'nb_epoch': [200],
@@ -74,10 +74,13 @@ Test with METABRIC Dataset
 # #
 # dnn_mt.multiple_y(endpoints)
 #
-# # dnn_mt.model_selection()
+# dnn_mt.best_model_selection(n_iter= 2, cv=3)
 #
+
+# dnn_mt.model_selection()
+
 # cv_results = dnn_mt.cv_fit(dnn_mt.X,dnn_mt.y,n_folds=5)
-#
+
 # print(cv_results)
 
 # X_train,X_test,y_train,y_test = rna_seq.split_dataset(split=1,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
@@ -93,21 +96,21 @@ Test with Neuroblastoma dataset
 
 rna_seq = Preprocessing("GSE49711_SEQC_NB_MAV_T_log2.20121127.txt","Clinical_data.txt",mt = True)
 
-#rna_seq.read_exprs_data("SEQC_", "#Gene")
+# rna_seq.read_exprs_data("SEQC_", "#Gene")
 
 # rna_seq.read_clinical_data("Sex_Imputed","NB ID")
 
 # rna_seq.load_data(4, "#Gene", "INSS_Stage","NB ID",equal=False)
 
-rna_seq.load_data(4, "#Gene", ["Sex_Imputed","INSS_Stage"],"NB ID",equal=False)
+rna_seq.load_data(4, "#Gene", ["Sex_Imputed","Age"],"NB ID",equal=False)
 
-rna_seq.nom_to_num()
+rna_seq.nom_to_num(column="Sex_Imputed")
 
 X,y = rna_seq.split_dataset(split=0,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
 
 parameters_batch = {
             'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
-            'optimization': ['SGD', 'Adam', 'RMSprop'],
+            'optimization': ['Adadelta', 'Adam', 'RMSprop'],
             'learning_rate': [0.015, 0.010, 0.005, 0.001],
             'batch_size': [16, 32, 64, 128, 256],
             'nb_epoch': [120,200],
@@ -118,19 +121,23 @@ parameters_batch = {
             'patience': [80]
         }
 #
-endpoints = ["Sex_Imputed","INSS_Stage"]
+endpoints = ["Sex_Imputed","Age"]
 #
-types = ['bin','multi']
+types = ['bin','reg']
 #
 dnn_mt = DNN_MT_simple(X = X, y = y, cv= 3, parameters_batch= parameters_batch, types = types)
 #
 dnn_mt.multiple_y(endpoints)
 
+dnn_mt.best_model_selection(n_iter= 2, cv=3)
+
 # dnn_mt.model_selection()
 
-cv_results = dnn_mt.cv_fit(dnn_mt.X,dnn_mt.y, n_folds=5)
+# cv_results = dnn_mt.cv_fit(dnn_mt.X,dnn_mt.y, n_folds=5)
 
-print(cv_results)
+# dnn_mt.model_selection(n_iter = 3 , cv = 3)
+
+# print(dnn_mt.model_selection_history)
 
 # dnn_mt.set_new_parameters()
 

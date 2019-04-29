@@ -16,6 +16,9 @@ from sklearn.model_selection import StratifiedKFold, train_test_split, KFold
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, matthews_corrcoef, r2_score, precision_score, recall_score, \
     log_loss
 import os
+from keras import backend as K
+print(K.tensorflow_backend._get_available_gpus())
+
 
 class DNN_MT_simple:
     def __init__(self, **kwargs):
@@ -41,7 +44,7 @@ class DNN_MT_simple:
             'patience': 30
         }
         self.filename = None
-        self.verbose = 1
+        self.verbose = 0
         # model selection parameters
         self.parameters_batch = None
         # self.parameters_batch = {
@@ -242,7 +245,7 @@ class DNN_MT_simple:
         return y_pred
 
     def evaluate_model(self, X_test, y_test):
-        print("Evaluating model with hold out test set.")
+        # print("Evaluating model with hold out test set.")
         y_pred = self.model.predict(X_test)
         # print(y_pred)
         # y_pred = [float(np.round(x)) for x in y_pred]
@@ -254,6 +257,7 @@ class DNN_MT_simple:
             if self.types[i] == "bin":
                 # print(y_pred)
                 # print(type(y_pred))
+                # print(y_pred[i])
                 y_pred_v1 = [float(np.round(x)) for x in y_pred[i]]
                 y_pred_v2 = np.ravel(y_pred_v1)
                 # print(y_test[i])
@@ -301,13 +305,8 @@ class DNN_MT_simple:
         X_train, X_val, y_train,y_val = train_test_split(X,y,test_size= test_size,shuffle= True)
         return X_train,X_val,y_train,y_val
 
-    def y_splitter(self,y):
-        y_list = []
-        for key in y.columns:
-            y_list.append(y.loc[:,key])
-        return y_list
 
-    def y_splitter_v2(self,y):
+    def y_splitter(self,y):
         y_list = []
         for i in range(y.shape[1]):
             y_list.append(y[:,i])
@@ -315,7 +314,7 @@ class DNN_MT_simple:
 
 
     def cv_fit(self,X,y,n_folds = 3,shuffle = True):
-        self.set_new_parameters()
+        # self.set_new_parameters()
         self.create_DNN_model()
         init_weights = self.model.get_weights()
         skf = KFold(n_splits = n_folds,shuffle=shuffle)
@@ -331,14 +330,16 @@ class DNN_MT_simple:
             y_train, y_valid = y.values[train], y.values[valid]
             # print(y_train)
             # print(y_valid)
-            y_train_splt = self.y_splitter_v2(y_train)
-            y_valid_splt = self.y_splitter_v2(y_valid)
+            y_train_splt = self.y_splitter(y_train)
+            y_valid_splt = self.y_splitter(y_valid)
             # print(y_train_splt)
             self.model.set_weights(init_weights)
             self.fit_model(X_train, X_valid, y_train_splt, y_valid_splt)
             # print(self.model.loss_functions)
             # print(self.model.metrics)
+            print("Train scores:")
             train_scores = self.evaluate_model(X_train, y_train_splt)
+            print("Validation scores:")
             valid_scores = self.evaluate_model(X_valid, y_valid_splt)
             train_scores_kf.append(train_scores)
             valid_scores_kf.append(valid_scores)
@@ -356,4 +357,97 @@ class DNN_MT_simple:
         return cv_results
 
     def model_selection(self,n_iter=2,cv=3):
-        pass
+        print("Selecting best DNN model")
+        old_parameters = self.parameters.copy()
+        self.model_selection_history = []
+        for iteration in range(n_iter):
+            print("Iteration no. " + str(iteration + 1))
+            new_parameters = self.batch_parameter_shufller()
+            temp_values = new_parameters.copy()
+            for key in new_parameters:
+                self.parameters[key] = new_parameters[key]
+            cv_results = self.cv_fit(self.X,self.y,n_folds = cv,shuffle= True)
+            for key in cv_results:
+                if "val" in key:
+                    temp_values[key] = cv_results[key]
+            self.model_selection_history.append(temp_values)
+        self.parameters = old_parameters.copy()
+        print("Best DNN model successfully selected")
+
+    def find_best_model(self):
+        if self.model_selection_history:
+            best_model = None
+            max_val_score= 0
+            for dic in self.model_selection_history:
+                valid_values = []
+                for key in dic:
+                    if "val" in key:
+                        valid_values.append(dic[key])
+                val_score = np.mean(valid_values)
+                if val_score > max_val_score:
+                    best_model = dic
+                    max_val_score = val_score
+        # If all models have score 0 assume the first one
+        if best_model is None:
+            best_model = self.model_selection_history[0]
+        return best_model
+
+    def select_best_model(self):
+        best_model = self.find_best_model()
+        for key in self.parameters:
+            if key in best_model.keys():
+                self.parameters[key] = best_model[key]
+        valid_values = []
+        for key in best_model:
+            if "val" in key:
+                valid_values.append(best_model[key])
+        val_score = np.mean(valid_values)
+        print("Best model:")
+        self.print_parameter_values()
+        print("Average_val_score:" + str(val_score))
+
+
+    def best_model_selection(self,n_iter=2,cv=3):
+        self.model_selection(n_iter=n_iter,cv=cv)
+        self.select_best_model()
+        self.create_DNN_model()
+        X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
+        X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
+        cv_results = self.cv_fit(X_train,y_train, cv)
+        print(cv_results)
+        y_train_splt = self.y_splitter(y_train_v2.values)
+        y_valid_splt = self.y_splitter(y_valid.values)
+        y_test_splt = self.y_splitter(y_test.values)
+        self.fit_model(X_train_v2,X_valid,y_train_splt,y_valid_splt)
+        self.evaluate_model(X_test,y_test_splt)
+        self.save_best_model()
+
+
+    def save_best_model(self):
+        print("Saving the best model")
+        i = 0
+        while os.path.exists("best_DNN_models/" + "DNN_mt" + str(i) + '.json'):
+            i += 1
+        root = "best_DNN_models"
+        if not os.path.exists(root):
+            os.makedirs(root)
+        file_name_model = os.path.join(root, "DNN_mt" + str(i) + '.json')
+        file_name_weights = os.path.join(root, "DNN_mt" + str(i) + '.h5')
+        model_json = self.model.to_json()
+        with open(file_name_model, "w") as json_file:
+            json_file.write(model_json)
+        # serialize weights to HDF5
+        self.model.save_weights(file_name_weights)
+        print("Saved model to disk")
+
+    def load_model(self,filename):
+        file_name_model = "best_DNN_models\\" + filename + '.json'
+        file_name_weights = "best_DNN_models\\" + filename + '.h5'
+        print("Loading model from: " + file_name_model)
+        json_file = open(file_name_model, 'r')
+        loaded_model_json = json_file.read()
+        json_file.close()
+        loaded_model = model_from_json(loaded_model_json)
+        loaded_model.load_weights(file_name_weights)
+        self.model = loaded_model
+        print("Model loaded successfully!")
