@@ -30,7 +30,7 @@ Test with TCGA-BRCA
 
 # rna_seq.nom_to_num()
 
-# X_train,X_test,y_train,y_test = rna_seq.split_dataset(split=1,normalize_method = None,filt_method = "KBest",features=5000, variance =0.01,test_size=0.3, stratify = True)
+# X_train,X_test,y_train,y_test = rna_seq.split_dataset(split=1,normalize_method = None,filt_method = "KBest",features=5000, variance =0.01,test_size=0.3, stratify = False)
 
 '''
 
@@ -40,42 +40,44 @@ Test with METABRIC Dataset
 º
 # 
 # # '''
-# rna_seq = Preprocessing("data_mRNA_median_Zscores.txt","data_clinical_sample.txt", mt=True)
+rna_seq = Preprocessing("data_mRNA_median_Zscores.txt","data_clinical_sample.txt", mt=True)
 #
-# # rna_seq.load_data("MB-", "Hugo_Symbol", "ER_STATUS", "PATIENT_ID")
-#
-#
-# rna_seq.load_data(2, "Hugo_Symbol", ["ER_STATUS","TUMOR_SIZE"], "PATIENT_ID")
-#
-# rna_seq.nom_to_num(column="ER_STATUS")
-#
-# X,y = rna_seq.split_dataset(split=0,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
+# rna_seq.load_data(2, "Hugo_Symbol", "ER_STATUS", "PATIENT_ID")
 #
 #
+rna_seq.load_data(2, "Hugo_Symbol", ["ER_STATUS","GRADE"], "PATIENT_ID")
 #
-# parameters_batch = {
-#             'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
-#             'optimization': ['Adadelta', 'Adam', 'RMSprop'],
-#             'learning_rate': [0.015, 0.010, 0.005, 0.001],
-#             'batch_size': [16, 32, 64, 128, 256],
-#             'nb_epoch': [200],
-#             'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
-#                                        [2500, 100], [2500, 500]],
-#             'units_in_input_layer': [5000],
-#             'early_stopping': [True],
-#             'patience': [80]
-#         }
+rna_seq.nom_to_num()
 #
-# endpoints = ["ER_STATUS","TUMOR_SIZE"]
-# #
-# types = ['bin','reg']
-# #
-# dnn_mt = DNN_MT_simple(X = X, y = y, cv= 3, parameters_batch= parameters_batch, types = types)
-# #
-# dnn_mt.multiple_y(endpoints)
+X,y = rna_seq.split_dataset(split=0,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
 #
-# dnn_mt.best_model_selection(n_iter= 2, cv=3)
 #
+#
+parameters_batch = {
+            'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            'optimization': ['Adadelta', 'Adam', 'RMSprop'],
+            'learning_rate': [0.015, 0.010, 0.005, 0.001],
+            'batch_size': [16, 32, 64, 128, 256],
+            'nb_epoch': [200],
+            'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
+                                       [2500, 100], [2500, 500]],
+            'units_in_input_layer': [5000],
+            'early_stopping': [True],
+            'patience': [80]
+        }
+
+endpoints = ["ER_STATUS","GRADE"]
+#
+types = ['bin','multi']
+#
+dnn_mt = DNN_MT_simple(X = X, y = y, cv= 5, parameters_batch= parameters_batch, types = types)
+
+# dnn_mt.insert_loss_weights([0.5,1.0])
+
+dnn_mt.multiple_y(endpoints)
+
+dnn_mt.best_model_selection(n_iter= 2,cv=2)
+
 
 # dnn_mt.model_selection()
 
@@ -92,44 +94,44 @@ Test with METABRIC Dataset
 Test with Neuroblastoma dataset
 
 '''
-# rna_seq = Preprocessing("GSE49711_SEQC_NB_MAV_T_log2.20121127.txt","Clinical_data.txt",mt = False)
-
-rna_seq = Preprocessing("GSE49711_SEQC_NB_MAV_T_log2.20121127.txt","Clinical_data.txt",mt = True)
-
-# rna_seq.read_exprs_data("SEQC_", "#Gene")
-
-# rna_seq.read_clinical_data("Sex_Imputed","NB ID")
-
-# rna_seq.load_data(4, "#Gene", "INSS_Stage","NB ID",equal=False)
-
-rna_seq.load_data(4, "#Gene", ["Sex_Imputed","Age"],"NB ID",equal=False)
-
-rna_seq.nom_to_num(column="Sex_Imputed")
-
-X,y = rna_seq.split_dataset(split=0,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
-
-parameters_batch = {
-            'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
-            'optimization': ['Adadelta', 'Adam', 'RMSprop'],
-            'learning_rate': [0.015, 0.010, 0.005, 0.001],
-            'batch_size': [16, 32, 64, 128, 256],
-            'nb_epoch': [120,200],
-            'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
-                                       [2500, 100], [2500, 500]],
-            'units_in_input_layer': [5000],
-            'early_stopping': [True],
-            'patience': [80]
-        }
+# # rna_seq = Preprocessing("GSE49711_SEQC_NB_MAV_T_log2.20121127.txt","Clinical_data.txt",mt = False)
 #
-endpoints = ["Sex_Imputed","Age"]
+# rna_seq = Preprocessing("GSE49711_SEQC_NB_MAV_T_log2.20121127.txt","Clinical_data.txt",mt = True)
 #
-types = ['bin','reg']
+# # rna_seq.read_exprs_data("SEQC_", "#Gene")
 #
-dnn_mt = DNN_MT_simple(X = X, y = y, cv= 3, parameters_batch= parameters_batch, types = types)
+# # rna_seq.read_clinical_data("Sex_Imputed","NB ID")
 #
-dnn_mt.multiple_y(endpoints)
-
-dnn_mt.best_model_selection(n_iter= 2, cv=3)
+# # rna_seq.load_data(4, "#Gene", "INSS_Stage","NB ID",equal=False)
+#
+# rna_seq.load_data(4, "#Gene", ["Sex_Imputed","INSS_Stage"],"NB ID",equal=False)
+#
+# rna_seq.nom_to_num()
+#
+# X,y = rna_seq.split_dataset(split=0,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
+#
+# parameters_batch = {
+#             'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
+#             'optimization': ['Adadelta', 'Adam', 'RMSprop'],
+#             'learning_rate': [0.015, 0.010, 0.005, 0.001],
+#             'batch_size': [16, 32, 64, 128, 256],
+#             'nb_epoch': [120,200],
+#             'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
+#                                        [2500, 100], [2500, 500]],
+#             'units_in_input_layer': [5000],
+#             'early_stopping': [True],
+#             'patience': [80]
+#         }
+# #
+# endpoints = ["Sex_Imputed","INSS_Stage"]
+# #
+# types = ['bin','multi']
+# #
+# dnn_mt = DNN_MT_simple(X = X, y = y, cv= 3, parameters_batch= parameters_batch, types = types)
+# #
+# dnn_mt.multiple_y(endpoints)
+#
+# dnn_mt.best_model_selection(n_iter= 4, cv=5)
 
 # dnn_mt.model_selection()
 
@@ -152,101 +154,6 @@ dnn_mt.best_model_selection(n_iter= 2, cv=3)
 # dnn_mt.fit_model(X_train,X_val,y_train_splt,y_val_splt)
 
 
-'''
-Test with breat cancer dataset NKI
-
-# '''
-# data = pd.read_csv("NKI_cleaned.csv", header = 0)
-# X = data.iloc[:,16:]
-#
-# y_pre = data.loc[:,"timerecurrence"]
-
-# y = nom_to_num(y_pre)
-# X_train,X_test,y_train,y_test = train_test_split(X,y_pre,test_size = 0.3)
-
-# shallow_bin_selection_split(X_train, X_test, y_train, y_test,"NKI", "shallow_bin")
-
-# dnn_bin_selection_split(X_train,X_test,y_train,y_test,"NKI","dnn_bin",n_iter = 2, cv=5)
-
-# shallow_multi_selection_split(X_train, X_test, y_train, y_test,"NKI", "shallow_multi")
-
-# dnn_multi_selection_split(X_train,X_test,y_train,y_test,"NKI","dnn_multi",n_iter = 2, cv=3)
-
-# shallow_reg_selection_split(X_train, X_test, y_train, y_test,"NKI", "shallow_reg")
-
-# dnn_reg_selection_split(X_train,X_test,y_train,y_test,"NKI","dnn_reg",n_iter = 2, cv=3)
-
-'''
-Wisconsin dataset
-'''
-
-
-# X_pre,y_pre = load_breast_cancer(return_X_y=True)
-#
-# X = pd.DataFrame(X_pre)
-# X_norm = normalize_data(X)
-#
-# y = pd.Series(y_pre)
-#
-# X_train,X_test,y_train,y_test = train_test_split(X_norm,y,test_size = 0.3)
-#
-# shallow_bin_selection_split(X_train, X_test, y_train, y_test,"wisconsin", "shallow_bin")
-
-# dnn_bin_selection_split(X_train,X_test,y_train,y_test,"wisconsin","dnn_bin",n_iter = 3, cv=5)
-
-'''
-Wine (multiclass classification)
-'''
-# X_pre,y_pre = load_wine(return_X_y=True)
-#
-# X = pd.DataFrame(X_pre)
-# X_norm = normalize_data(X)
-
-# y = nom_to_num(y_pre)
-
-# X_train,X_test,y_train,y_test = train_test_split(X_norm,y,test_size = 0.3)
-
-# shallow_multi_selection_split(X_train, X_test, y_train, y_test,"wine", "shallow_multi")
-
-# dnn_multi_selection_split(X_train,X_test,y_train,y_test,"wine","dnn_multi",n_iter = 3, cv=5)
-
-'''
-Diabetes dataset (regression)
-'''
-# X_pre,y_pre = load_diabetes(return_X_y=True)
-
-# X = pd.DataFrame(X_pre)
-# X_norm = normalize_data(X)
-
-# y = pd.Series(y_pre)
-
-# X_train,X_test,y_train,y_test = train_test_split(X_norm,y,test_size = 0.3)
-
-# shallow_reg_selection_split(X_train, X_test, y_train, y_test,"diabetes", "shallow_reg")
-
-# dnn_reg_selection_split(X_train,X_test,y_train,y_test,"diabetes","dnn_reg",n_iter = 3, cv=5)
-
-'''
-Cancer reg (regression)
-'''
-
-# data = pd.read_csv("cancer_reg.csv")
-#
-# X_pre = data.drop(['binnedinc','geography','pctsomecol18_24','pctprivatecoveragealone'], axis = 1)
-#
-# X_pre = X_pre.dropna()
-#
-# y = X_pre.loc[:,'target_deathrate']
-#
-# X = X_pre.drop('target_deathrate',axis = 1)
-#
-# X_norm = normalize_data(X)
-#
-# X_train,X_test,y_train,y_test = train_test_split(X_norm,y,test_size = 0.3)
-#
-# # shallow_reg_selection_split(X_train, X_test, y_train, y_test, "cancer", "shallow_reg")
-#
-# dnn_reg_selection_split(X_train,X_test,y_train,y_test,"cancer","dnn_reg",n_iter = 3, cv=5)
 
 '''
 Função que transforma dados nominais em dados numéricos
@@ -284,7 +191,7 @@ Divisão em datasets de treino e teste
 # parameters_batch = {
 #             'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
 #             'output_activation': ['sigmoid'],
-#             'optimization': ['SGD', 'Adam', 'RMSprop'],
+#             'optimization': ['Adadelta', 'Adam', 'RMSprop'],
 #             'learning_rate': [0.015, 0.010, 0.005, 0.001],
 #             'batch_size': [16, 32, 64, 128, 256],
 #             'nb_epoch': [120,200],
@@ -294,7 +201,7 @@ Divisão em datasets de treino e teste
 #             'early_stopping': [True],
 #             'patience': [80]
 #         }
-#
+
 
 # dnn_bin = DNN_bin(X= X, y = y, cv = 3, parameters_batch = parameters_batch)
 
@@ -313,7 +220,7 @@ Divisão em datasets de treino e teste
 
 # shallow_bin = Shallow_bin(X_train = X_train, X_test = X_test, y_train = y_train, y_test = y_test, cv=5)
 
-# shallow_bin.multi_model_selection("Shallow_results_bin","TCGA-BRCA_bin")
+# shallow_bin.multi_model_selection("Shallow_results_bin","Metabric_bin")
 
 # shallow_bin_2 = Shallow_bin(X_train = X_train, X_test = X_test, y_train = y_train, y_test = y_test, cv=5)
 

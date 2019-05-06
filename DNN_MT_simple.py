@@ -73,7 +73,7 @@ class DNN_MT_simple:
             self.splitted = True
         if kwargs['cv']:
             assert type(kwargs['cv']) is int, 'cv value must be of type int.'
-            assert kwargs['cv'] >= 3, 'cv value must be at least 3.'
+            assert kwargs['cv'] >= 2, 'cv value must be at least 2.'
             self.cv = kwargs['cv']
         if self.splitted == True:
             self.feature_number = self.X_train.shape[1]
@@ -81,7 +81,7 @@ class DNN_MT_simple:
             self.feature_number = self.X.shape[1]
         self.parameters_batch = kwargs["parameters_batch"]
         self.types = kwargs["types"]
-
+        self.loss_weights = None
 
     def multiple_y(self,endpoints):
         if self.splitted == True:
@@ -103,6 +103,9 @@ class DNN_MT_simple:
     def insert_endpoints(self,endpoints):
         self.endpoints = endpoints
         self.endpoints_number = len(endpoints)
+
+    def insert_loss_weights(self,loss_weights):
+        self.loss_weights = loss_weights
 
     def generate_y_dicts(self):
         if self.splitted == True:
@@ -198,7 +201,10 @@ class DNN_MT_simple:
             optim = Adadelta()
 
         model = Model(outputs = list(self.output_dict.values()),input=[input])
-        model.compile(optimizer=optim, loss = list(self.loss_dict.values()),metrics = list(self.metrics_dict.values()))
+        if self.loss_weights != None:
+            model.compile(optimizer=optim, loss=list(self.loss_dict.values()), metrics=list(self.metrics_dict.values()),loss_weights=self.loss_weights)
+        else:
+            model.compile(optimizer=optim, loss = list(self.loss_dict.values()),metrics = list(self.metrics_dict.values()))
         if self.verbose == 1: str(model.summary())
         self.model = model
         self.multiple_y(self.endpoints)
@@ -313,6 +319,25 @@ class DNN_MT_simple:
         return y_list
 
 
+    def hold_out_fit(self,X_train,X_valid,y_train,y_valid):
+        res = {}
+        self.create_DNN_model()
+        y_train_splt = self.y_splitter(y_train.values)
+        y_valid_splt = self.y_splitter(y_valid.values)
+        self.fit_model(X_train, X_valid, y_train_splt, y_valid_splt)
+        print("Train scores:")
+        train_scores = self.evaluate_model(X_train, y_train_splt)
+        print("Validation scores:")
+        valid_scores = self.evaluate_model(X_valid, y_valid_splt)
+        for endpoint in self.endpoints:
+            res[endpoint + "_train_score: "] = train_scores[endpoint]
+            res[endpoint + "_valid_score: "] = valid_scores[endpoint]
+        return res
+
+    def fold_generator(self,n_folds,X):
+        skf = KFold(n_splits=n_folds,shuffle=True)
+        return skf.split(X)
+
     def cv_fit(self,X,y,n_folds = 3,shuffle = True):
         # self.set_new_parameters()
         self.create_DNN_model()
@@ -346,30 +371,84 @@ class DNN_MT_simple:
             i += 1
         # print(self.model.loss_functions)
         # print(self.model.metrics)
-        train_scores_list = []
-        valid_scores_list = []
+        print(train_scores_kf)
+        print(valid_scores_kf)
         for endpoint in self.endpoints:
+            train_scores_list = []
+            valid_scores_list = []
             for i in range(n_folds):
                 train_scores_list.append(train_scores_kf[i][endpoint])
                 valid_scores_list.append(valid_scores_kf[i][endpoint])
-                cv_results[endpoint + '_train_score_mean'] = np.mean(train_scores_list)
-                cv_results[endpoint + '_valid_score_mean'] = np.mean(valid_scores_list)
+            cv_results[endpoint + '_train_score_mean'] = np.mean(train_scores_list)
+            cv_results[endpoint + '_valid_score_mean'] = np.mean(valid_scores_list)
         return cv_results
 
-    def model_selection(self,n_iter=2,cv=3):
+    def cv_fit(self,X,y,n_folds = 3,shuffle = True):
+        # self.set_new_parameters()
+        self.create_DNN_model()
+        init_weights = self.model.get_weights()
+        skf = KFold(n_splits = n_folds,shuffle=shuffle)
+        train_scores_kf = []
+        valid_scores_kf = []
+        cv_results = {}
+        i = 0
+        for train, valid in skf.split(X):
+            print("Running Fold " + str(i + 1) + str("/") + str(n_folds))
+            # print(X)
+            # print(y)
+            X_train, X_valid = X.values[train], X.values[valid]
+            y_train, y_valid = y.values[train], y.values[valid]
+            # print(y_train)
+            # print(y_valid)
+            y_train_splt = self.y_splitter(y_train)
+            y_valid_splt = self.y_splitter(y_valid)
+            # print(y_train_splt)
+            self.model.set_weights(init_weights)
+            self.fit_model(X_train, X_valid, y_train_splt, y_valid_splt)
+            # print(self.model.loss_functions)
+            # print(self.model.metrics)
+            print("Train scores:")
+            train_scores = self.evaluate_model(X_train, y_train_splt)
+            print("Validation scores:")
+            valid_scores = self.evaluate_model(X_valid, y_valid_splt)
+            train_scores_kf.append(train_scores)
+            valid_scores_kf.append(valid_scores)
+            i += 1
+        # print(self.model.loss_functions)
+        # print(self.model.metrics)
+        print(train_scores_kf)
+        print(valid_scores_kf)
+        for endpoint in self.endpoints:
+            train_scores_list = []
+            valid_scores_list = []
+            for i in range(n_folds):
+                train_scores_list.append(train_scores_kf[i][endpoint])
+                valid_scores_list.append(valid_scores_kf[i][endpoint])
+            cv_results[endpoint + '_train_score_mean'] = np.mean(train_scores_list)
+            cv_results[endpoint + '_valid_score_mean'] = np.mean(valid_scores_list)
+        return cv_results
+
+    def model_selection(self,X,y,n_iter=2,cv=3):
         print("Selecting best DNN model")
         old_parameters = self.parameters.copy()
         self.model_selection_history = []
+        X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.3, shuffle=True)
         for iteration in range(n_iter):
             print("Iteration no. " + str(iteration + 1))
             new_parameters = self.batch_parameter_shufller()
             temp_values = new_parameters.copy()
             for key in new_parameters:
                 self.parameters[key] = new_parameters[key]
-            cv_results = self.cv_fit(self.X,self.y,n_folds = cv,shuffle= True)
-            for key in cv_results:
-                if "val" in key:
-                    temp_values[key] = cv_results[key]
+            if cv <= 2:
+                hold_out_res = self.hold_out_fit(X_train,X_valid,y_train,y_valid)
+                for key in hold_out_res:
+                    if "val" in key:
+                        temp_values[key] = hold_out_res[key]
+            elif cv > 2:
+                cv_results = self.cv_fit(X,y,n_folds = cv,shuffle= True)
+                for key in cv_results:
+                    if "val" in key:
+                        temp_values[key] = cv_results[key]
             self.model_selection_history.append(temp_values)
         self.parameters = old_parameters.copy()
         print("Best DNN model successfully selected")
@@ -407,21 +486,28 @@ class DNN_MT_simple:
         print("Average_val_score:" + str(val_score))
 
 
-    def best_model_selection(self,n_iter=2,cv=3):
-        self.model_selection(n_iter=n_iter,cv=cv)
+    def best_model_selection(self,n_iter=2,cv=2):
+        X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
+        # X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
+        kf_folds = self.fold_generator(cv,X_train)
+        self.model_selection(X_train,y_train,n_iter=n_iter,cv=cv)
         self.select_best_model()
         self.create_DNN_model()
-        X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
-        X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
-        # print(X_train)
-        # print(y_train)
-        cv_results = self.cv_fit(X_train,y_train, cv)
-        print(cv_results)
-        y_train_splt = self.y_splitter(y_train_v2.values)
+        X_train_f,X_valid,y_train_f,y_valid = train_test_split(X_train,y_train,test_size=0.3,shuffle=True)
+        y_train_splt = self.y_splitter(y_train_f.values)
         y_valid_splt = self.y_splitter(y_valid.values)
         y_test_splt = self.y_splitter(y_test.values)
-        self.fit_model(X_train_v2,X_valid,y_train_splt,y_valid_splt)
+        self.fit_model(X_train_f,X_valid,y_train_splt,y_valid_splt)
+        print("Train test results: ")
         self.evaluate_model(X_test,y_test_splt)
+        cv_results = self.cv_fit(X_test,y_test,self.cv)
+        # cv_results = self.cv_fit(X_train,y_train, cv)
+        print(cv_results)
+        # y_train_splt = self.y_splitter(y_train_v2.values)
+        # y_valid_splt = self.y_splitter(y_valid.values)
+        # y_test_splt = self.y_splitter(y_test.values)
+        # self.fit_model(X_train_v2,X_valid,y_train_splt,y_valid_splt)
+        # self.evaluate_model(X_test,y_test_splt)
         self.save_best_model()
 
 
