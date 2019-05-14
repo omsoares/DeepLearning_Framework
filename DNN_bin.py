@@ -432,13 +432,13 @@ class DNN_bin:
 
     def multi_model_selection(self, root_dir, experiment_designation, n_iter=10, cv=5):
         file_name = experiment_designation
-        # self.model_selection(self.X_train.values, self.y_train.values, n_iter, cv)
-        self.model_selection(self.X_train, self.y_train, n_iter, cv)
+        self.model_selection(self.X_train.values, self.y_train.values, n_iter, cv)
+        # self.model_selection(self.X_train, self.y_train, n_iter, cv)
         self.write_model_selection_results(root_dir, file_name)
         self.select_best_model()
         self.create_DNN_model()
-        # cv_scores, cv_history, time_fit = self.cv_fit(self.X_test.values, self.y_test.values, cv)
-        cv_scores, cv_history, time_fit = self.cv_fit(self.X_test, self.y_test, cv)
+        cv_scores, cv_history, time_fit = self.cv_fit(self.X_test.values, self.y_test.values, cv)
+        # cv_scores, cv_history, time_fit = self.cv_fit(self.X_test, self.y_test, cv)
         self.plot_model_performance(cv_history, root_dir, file_name)
         mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
         self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
@@ -446,11 +446,11 @@ class DNN_bin:
 
     def multi_model_selection_cv(self, root_dir, experiment_designation, n_iter=100, cv=10):
         file_name = experiment_designation
-        self.model_selection(self.X, self.y, n_iter, cv)
+        self.model_selection(self.X.values, self.y.values, n_iter, cv)
         self.write_model_selection_results(root_dir, file_name)
         self.select_best_model()
         self.create_DNN_model()
-        cv_scores, cv_history, time_fit = self.cv_fit(self.X, self.y, cv)
+        cv_scores, cv_history, time_fit = self.cv_fit(self.X.values, self.y.values, cv)
         self.plot_model_performance(cv_history, root_dir, file_name)
         mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
         self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)

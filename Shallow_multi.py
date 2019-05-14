@@ -96,6 +96,8 @@ class Shallow_multi:
         scores_cv_list = []
         skf = StratifiedKFold(n_splits=cv, shuffle=False)
         for train, valid in skf.split(X, y):
+            print(X)
+            print(y)
             X_train, X_valid = X[train], X[valid]
             y_train, y_valid = y[train], y[valid]
             self.model.fit(X_train, y_train)
@@ -294,16 +296,16 @@ class Shallow_multi:
             print(model)
             model_call = getattr(self, "model_selection_" + model)
             # print(model_call)
-            # model_call(self.X_train.astype(np.float), self.y_train.astype(int), cv)
-            model_call(self.X_train, self.y_train, cv)
+            model_call(self.X_train.astype(np.float), self.y_train.astype(int), cv)
+            # model_call(self.X_train, self.y_train, cv)
             file_name = model + '_' + experiment_designation
             self.print_parameter_values()
             # print(self.X_test)
             # print(self.y_test)
             # print(self.model_name)
             # print(self.model)
-            # scores = self.evaluate_model(self.X_test.astype(np.float), self.y_test.astype(int))
-            scores = self.evaluate_model(self.X_test, self.y_test)
+            scores = self.evaluate_model(self.X_test.astype(np.float), self.y_test.astype(int))
+            # scores = self.evaluate_model(self.X_test, self.y_test)
             self.write_report(scores, root_dir, file_name)
             self.write_cv_results(root_dir, file_name)
             self.save_best_model()
@@ -312,10 +314,10 @@ class Shallow_multi:
         for model in self.list_models:
             print(model)
             model_call = getattr(self, "model_selection_" + model)
-            model_call(self.X, self.y, cv)
+            model_call(self.X.values, self.y.values, cv)
             file_name = model + '_' + experiment_designation
             self.print_parameter_values()
-            scores_cv_list = self.calculate_scores_cv(self.X, self.y, cv)
+            scores_cv_list = self.calculate_scores_cv(self.X.values, self.y.values, cv)
             mean, sd, raw = self.format_scores_cv(scores_cv_list)
             self.write_report_cv(mean, sd, raw, root_dir, file_name)
             self.write_cv_results(root_dir, file_name)
