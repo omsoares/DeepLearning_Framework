@@ -33,7 +33,7 @@ class DNN_multi:
         # parameters of selected DNN model
         self.parameters = {
             'dropout': 0.5,
-            'output_activation': 'softmax',
+            # 'output_activation': 'softmax',
             'optimization': 'SGD',
             'learning_rate': 0.005,
             'units_in_input_layer': 5000,
@@ -89,7 +89,7 @@ class DNN_multi:
 
     def create_DNN_model(self, verbose=True):
         print("Creating DNN model")
-        fundamental_parameters = ['dropout', 'output_activation', 'optimization', 'learning_rate',
+        fundamental_parameters = ['dropout', 'optimization', 'learning_rate',
                                   'units_in_input_layer',
                                   'units_in_hidden_layers', 'nb_epoch', 'batch_size']
         for param in fundamental_parameters:
@@ -109,9 +109,9 @@ class DNN_multi:
             model.add(Dropout(self.parameters['dropout']))
         # constructing the final layer
         if self.y is not None:
-            model.add(Dense(len(np.unique(self.y)), activation=self.parameters['output_activation']))
+            model.add(Dense(len(np.unique(self.y)), activation="softmax"))
         else:
-            model.add(Dense(len(self.y_train.unique()), activation=self.parameters['output_activation']))
+            model.add(Dense(len(self.y_train.unique()), activation="softmax"))
         if self.parameters['optimization'] == 'SGD':
             optim = SGD(lr = self.parameters['learning_rate'] )
             # optim.lr.set_value(self.parameters['learning_rate'])
@@ -188,8 +188,8 @@ class DNN_multi:
         # print(y_pred)
         # y_pred = [float(np.round(x)) for x in y_pred]
         y_pred = np.ravel(y_pred)
-        # print(y_pred)
-        # print(y_test)
+        print(y_pred)
+        print(y_test)
         scores = dict()
         scores['accuracy'] = accuracy_score(y_test, y_pred)
         scores['f1_score'] = f1_score(y_test, y_pred, average = "weighted")
@@ -295,8 +295,8 @@ class DNN_multi:
             chosen_param[key] = choice(self.parameters_batch[key])
         return chosen_param
 
-    def set_filename(self):
-        self.filename = HighThroughput.endpoint_name
+    def set_filename(self,filename):
+        self.filename = filename
 
     def plot_model_performance(self, cv_history, root_dir, file_name, save_fig=True, show_plot=False):
         # summarize history for loss
@@ -382,12 +382,12 @@ class DNN_multi:
         df.to_csv(cv_df_path, sep='\t')
         print("Report files successfully written.")
 
-    def model_fit_results(self, dropout, output_activation, optimization, learning_rate, units_in_input_layer,
+    def model_fit_results(self, dropout, optimization, learning_rate, units_in_input_layer,
                   units_in_hidden_layers, nb_epoch, batch_size, early_stopping, patience, root_dir, file_name, cv):
         self.parameters = {
 
             'dropout': dropout,
-            'output_activation': output_activation,
+            # 'output_activation': output_activation,
             'optimization': optimization,
             'learning_rate': learning_rate,
             'units_in_input_layer': units_in_input_layer,
@@ -459,66 +459,3 @@ class DNN_multi:
         mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
         self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
         self.save_best_model()
-
-def dnn_model_fit(dropout, output_activation, optimization, learning_rate, units_in_input_layer,
-                  units_in_hidden_layers, nb_epoch, batch_size, early_stopping, patience, root_dir, file_name, cv,
-                  X, y):
-    dnn = DNN_multi(X=X, y=y, cv=cv)
-    dnn.parameters = {
-
-        'dropout': dropout,
-        'output_activation': output_activation,
-        'optimization': optimization,
-        'learning_rate': learning_rate,
-        'units_in_input_layer': units_in_input_layer,
-        'units_in_hidden_layers': units_in_hidden_layers,
-        'nb_epoch': nb_epoch,
-        'batch_size': batch_size,
-        'early_stopping': early_stopping,
-        'patience': patience
-
-    }
-    cv_scores, cv_history, time_fit = dnn.cv_fit(dnn.X, dnn.y, cv)
-    dnn.plot_model_performance(cv_history, root_dir, file_name)
-    mean_scores, sd_scores, raw_scores = dnn.format_scores_cv(cv_scores)
-    dnn.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
-    time_fit = np.asarray(time_fit, dtype=float)
-    del dnn.model
-
-
-def dnn_multi_selection_split(X_train, X_test, y_train, y_test, root_dir, experiment_designation, n_iter=10, cv=5):
-    parameters_batch = {
-        'dropout': [0.5],
-        'output_activation': ['softmax'],
-        'optimization': ['Adam'],
-        'learning_rate': [0.015, 0.010, 0.005, 0.001],
-        'batch_size': [16, 32],
-        'nb_epoch': [200],
-        'units_in_hidden_layers': [[13, 7, 3], [13, 7]],
-        'units_in_input_layer': [13],
-        'early_stopping': [True],
-        'patience': [80]
-    }
-    dnn = DNN_multi(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test, cv=cv, parameters_batch = parameters_batch)
-    file_name = experiment_designation
-    dnn.model_selection(dnn.X_train.values, dnn.y_train.values, n_iter, cv)
-    dnn.write_model_selection_results(root_dir, file_name)
-    dnn.select_best_model()
-    dnn.create_DNN_model()
-    cv_scores, cv_history, time_fit = dnn.cv_fit(dnn.X_test.values, dnn.y_test.values, cv)
-    dnn.plot_model_performance(cv_history, root_dir, file_name)
-    mean_scores, sd_scores, raw_scores = dnn.format_scores_cv(cv_scores)
-    dnn.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
-
-
-def dnn_multi_selection_cv(X, y, root_dir, experiment_designation, n_iter=100, cv=10):
-    dnn = DNN_multi(X=X, y=y, cv=cv)
-    file_name = experiment_designation
-    dnn.model_selection(dnn.X, dnn.y, n_iter, cv)
-    dnn.write_model_selection_results(root_dir, file_name)
-    dnn.select_best_model()
-    dnn.create_DNN_model()
-    cv_scores, cv_history, time_fit = dnn.cv_fit(dnn.X, dnn.y, cv)
-    dnn.plot_model_performance(cv_history, root_dir, file_name)
-    mean_scores, sd_scores, raw_scores = dnn.format_scores_cv(cv_scores)
-    dnn.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)

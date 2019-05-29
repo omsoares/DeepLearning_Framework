@@ -118,7 +118,7 @@ class DNN_reg:
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
-        model.compile(loss='mean_squared_error', optimizer=optim, metrics=[r2])
+        model.compile(loss='mean_squared_error', optimizer=optim, metrics=[r2_keras])
         if self.verbose == 1: str(model.summary())
         self.model = model
         print("DNN model sucessfully created")
@@ -287,8 +287,8 @@ class DNN_reg:
             chosen_param[key] = choice(self.parameters_batch[key])
         return chosen_param
 
-    def set_filename(self):
-        self.filename = HighThroughput.endpoint_name
+    def set_filename(self,filename):
+        self.filename = filename
 
     def plot_model_performance(self, cv_history, root_dir, file_name, save_fig=True, show_plot=False):
         # summarize history for loss
@@ -306,8 +306,8 @@ class DNN_reg:
         ## With each iteration the error reduces smoothly
         fig.add_subplot(122)
         for record in cv_history:
-            plt.plot(record.history['r2'], color='blue')
-            plt.plot(record.history['val_r2'], color='orange')
+            plt.plot(record.history['r2_keras'], color='blue')
+            plt.plot(record.history['val_r2_keras'], color='orange')
             plt.legend(['train', 'test'], loc='upper left')
         plt.title('model r2')
         plt.ylabel('r2')
@@ -374,12 +374,12 @@ class DNN_reg:
         df.to_csv(cv_df_path, sep='\t')
         print("Report files successfully written.")
 
-    def model_fit_results(self, dropout, output_activation, optimization, learning_rate, units_in_input_layer,
+    def model_fit_results(self, dropout, optimization, learning_rate, units_in_input_layer,
                   units_in_hidden_layers, nb_epoch, batch_size, early_stopping, patience, root_dir, file_name, cv):
         self.parameters = {
 
             'dropout': dropout,
-            'output_activation': output_activation,
+            # 'output_activation': output_activation,
             'optimization': optimization,
             'learning_rate': learning_rate,
             'units_in_input_layer': units_in_input_layer,
@@ -452,64 +452,3 @@ class DNN_reg:
         self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
         self.save_best_model()
 
-
-def dnn_model_fit(dropout, optimization, learning_rate, units_in_input_layer,
-                  units_in_hidden_layers, nb_epoch, batch_size, early_stopping, patience, root_dir, file_name, cv,
-                  X, y):
-    dnn = DNN_reg(X=X, y=y, cv=cv)
-    dnn.parameters = {
-
-        'dropout': dropout,
-        'optimization': optimization,
-        'learning_rate': learning_rate,
-        'units_in_input_layer': units_in_input_layer,
-        'units_in_hidden_layers': units_in_hidden_layers,
-        'nb_epoch': nb_epoch,
-        'batch_size': batch_size,
-        'early_stopping': early_stopping,
-        'patience': patience
-
-    }
-    cv_scores, cv_history, time_fit = dnn.cv_fit(dnn.X, dnn.y, cv)
-    dnn.plot_model_performance(cv_history, root_dir, file_name)
-    mean_scores, sd_scores, raw_scores = dnn.format_scores_cv(cv_scores)
-    dnn.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
-    time_fit = np.asarray(time_fit, dtype=float)
-    del dnn.model
-
-
-def dnn_reg_selection_split(X_train, X_test, y_train, y_test, root_dir, experiment_designation, n_iter=10, cv=5):
-    parameters_batch = {
-        'dropout': [0],
-        'optimization': ['Adam'],
-        'learning_rate': [0.015, 0.010, 0.005, 0.001],
-        'batch_size': [16, 32],
-        'nb_epoch': [200],
-        'units_in_hidden_layers': [[28, 14, 7], [14, 7]],
-        'units_in_input_layer': [28],
-        'early_stopping': [True],
-        'patience': [80]
-    }
-    dnn = DNN_reg(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test, cv=cv, parameters_batch=parameters_batch)
-    file_name = experiment_designation
-    dnn.model_selection(dnn.X_train.values, dnn.y_train.values, n_iter, cv)
-    dnn.write_model_selection_results(root_dir, file_name)
-    dnn.select_best_model()
-    dnn.create_DNN_model()
-    cv_scores, cv_history, time_fit = dnn.cv_fit(dnn.X_test.values, dnn.y_test.values, cv)
-    dnn.plot_model_performance(cv_history, root_dir, file_name)
-    mean_scores, sd_scores, raw_scores = dnn.format_scores_cv(cv_scores)
-    dnn.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
-
-
-def dnn_reg_selection_cv(X, y, root_dir, experiment_designation, n_iter=100, cv=10):
-    dnn = DNN_reg(X=X, y=y, cv=cv)
-    file_name = experiment_designation
-    dnn.model_selection(dnn.X, dnn.y, n_iter, cv)
-    dnn.write_model_selection_results(root_dir, file_name)
-    dnn.select_best_model()
-    dnn.create_DNN_model()
-    cv_scores, cv_history, time_fit = dnn.cv_fit(dnn.X, dnn.y, cv)
-    dnn.plot_model_performance(cv_history, root_dir, file_name)
-    mean_scores, sd_scores, raw_scores = dnn.format_scores_cv(cv_scores)
-    dnn.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)

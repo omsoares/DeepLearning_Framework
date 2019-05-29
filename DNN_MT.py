@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use('Agg')
 import time
 import matplotlib.pyplot as plt
-from keras.models import Sequential,Model
+from keras.models import Model
 from keras.layers import Dense, Dropout, BatchNormalization, Input
 from keras.models import model_from_json
 from keras.layers.normalization import BatchNormalization
@@ -143,8 +143,8 @@ class DNN_MT:
                 x = Dense(units,activation="relu")(x)
             x = BatchNormalization()(x)
             x = Dropout(self.parameters['dropout'])(x)
-        self.output_dict = {}
-        self.output_list = []
+        output_dict = {}
+        output_list = []
 
         for type in enumerate(self.types):
             if type[1] == "bin":
@@ -161,8 +161,8 @@ class DNN_MT:
                 # output_activation = "linear"
                 output_activation = None
             output_name = self.endpoints[type[0]]
-            self.output_dict[output_name] = Dense(units, activation=output_activation, name=output_name)(x)
-            self.output_list.append(output_name)
+            output_dict[output_name] = Dense(units, activation=output_activation, name=output_name)(x)
+            output_list.append(output_name)
 
         #
         # for output in enumerate(self.parameters["output_activation"]):
@@ -177,17 +177,17 @@ class DNN_MT:
         #         units = 1
         #     output_name = self.endpoints[output[0]] + "_output"
         #     # constructing the final layer - Multi task DNN.
-        #     self.output_dict[output_name] = Dense(units, activation= output[1], name = output_name)(x)
-        #     self.output_list.append(output_name)
+        #     output_dict[output_name] = Dense(units, activation= output[1], name = output_name)(x)
+        #     output_list.append(output_name)
 
-        self.loss_types = {"bin":"binary_crossentropy", "multi":"sparse_categorical_crossentropy","reg": "mean_squared_error"}
-        self.metric_types = {"bin":"accuracy","multi": "accuracy","reg":r2_keras}
-        self.metrics_dict = {}
-        self.loss_dict = {}
+        loss_types = {"bin":"binary_crossentropy", "multi":"sparse_categorical_crossentropy","reg": "mean_squared_error"}
+        metric_types = {"bin":"accuracy","multi": "accuracy","reg":r2_keras}
+        metrics_dict = {}
+        loss_dict = {}
 
-        for output,type in zip(self.output_list,self.types):
-            self.loss_dict[output] = self.loss_types[type]
-            self.metrics_dict[output] = self.metric_types[type]
+        for output,type in zip(output_list,self.types):
+            loss_dict[output] = loss_types[type]
+            metrics_dict[output] = metric_types[type]
 
 
         if self.parameters['optimization'] == 'SGD':
@@ -201,11 +201,11 @@ class DNN_MT:
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
 
-        model = Model(outputs = list(self.output_dict.values()),input=[input])
+        model = Model(outputs = list(output_dict.values()),input=[input])
         if self.loss_weights != None:
-            model.compile(optimizer=optim, loss=list(self.loss_dict.values()), metrics=list(self.metrics_dict.values()),loss_weights=self.loss_weights)
+            model.compile(optimizer=optim, loss=list(loss_dict.values()), metrics=list(metrics_dict.values()),loss_weights=self.loss_weights)
         else:
-            model.compile(optimizer=optim, loss = list(self.loss_dict.values()),metrics = list(self.metrics_dict.values()))
+            model.compile(optimizer=optim, loss = list(loss_dict.values()),metrics = list(metrics_dict.values()))
         if self.verbose == 1: str(model.summary())
         self.model = model
         # self.multiple_y(self.endpoints)
@@ -236,24 +236,25 @@ class DNN_MT:
         print("DNN model successfully fit in ", timer(fit_time))
         return fit_time
 
-    def print_fit_results(self, train_scores, val_scores):
-        for score in range(self.endpoints_number):
-            print("Metrics for endpoint" + " " + self.endpoints[score])
-            print('val_accuracy: ', val_scores[self.endpoints[score]])
-            # print('val_loss: ', val_scores[0])
-            print('train_accuracy: ', train_scores[self.endpoints[score]])
-            # print('train_loss: ', train_scores[0])
-            print("train/val loss ratio: ", min(self.history.history['loss']) / min(self.history.history['val_loss']))
+    # def print_fit_results(self, train_scores, val_scores):
+    #     for score in range(self.endpoints_number):
+    #         print("Metrics for endpoint" + " " + self.endpoints[score])
+    #         print('val_accuracy: ', val_scores[self.endpoints[score]])
+    #         # print('val_loss: ', val_scores[0])
+    #         print('train_accuracy: ', train_scores[self.endpoints[score]])
+    #         # print('train_loss: ', train_scores[0])
+    #         print("train/val loss ratio: ", min(self.history.history['loss']) / min(self.history.history['val_loss']))
 
     def predict_values(self,X):
         y_pred = self.model.predict(X)
-        y_pred = [float(np.round(x)) for x in y_pred]
-        y_pred = np.ravel(y_pred)
+        # y_pred = [float(np.round(x)) for x in y_pred]
+        # y_pred = np.ravel(y_pred)
         return y_pred
 
     def evaluate_model(self, X_test, y_test):
         # print("Evaluating model with hold out test set.")
         y_pred = self.model.predict(X_test)
+        # print(y_test)
         # print(y_pred)
         # y_pred = [float(np.round(x)) for x in y_pred]
         # y_pred = np.ravel(y_pred)
@@ -276,8 +277,8 @@ class DNN_MT:
                 # print(y_pred)
                 # y_pred = [float(np.round(x)) for x in y_pred]
                 y_pred_v2 = np.ravel(y_pred_v1)
-                # print(y_test[i])
-                # print(y_pred_v2)
+                print(y_test[i])
+                print(y_pred_v2)
                 # scores['roc_auc'] = roc_auc_score(y_test, y_pred)
                 scores[str(self.endpoints[i])] = accuracy_score(y_test[i], y_pred_v2)
                 # scores[str(self.endpoints[i]) + "_log_loss"] = log_loss(y_test[i], y_pred[i], labels = np.unique(y_test[i]))
@@ -493,7 +494,7 @@ class DNN_MT:
     def best_model_selection(self,n_iter=2,cv=2):
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
         # X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
-        kf_folds = self.fold_generator(cv,X_train)
+        # kf_folds = self.fold_generator(cv,X_train)
         self.model_selection(X_train,y_train,n_iter=n_iter,cv=cv)
         self.select_best_model()
         self.create_DNN_model()

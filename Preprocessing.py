@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 import numpy as np
-from scipy import stats
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.feature_selection import SelectKBest, f_classif
@@ -18,8 +17,6 @@ class Preprocessing:
         self.n_features = None
         self.n_samples = None
         self.features = None
-        self.X = None
-        self.y = None
         self.mt = mt
 
 
@@ -34,7 +31,6 @@ class Preprocessing:
         """
         print("Reading High Throughput gene expression file...")
         exprs = pd.read_table(self.expr_file, header=0, sep=sep)
-        # exprs_1 = exprs.filter(regex=(pat_tag)).transpose()
         exprs_1 = exprs.iloc[:,column_index:]
         if transpose:
             exprs_2 = exprs_1.transpose()
@@ -50,7 +46,6 @@ class Preprocessing:
     def read_clinical_data(self,cd_column,pat_id_column,sep):
         """
         Reads clinical data file.
-
         cd_column is the string of the column name corresponding to y values (values to be predicted)
 
         pat_id_column must be the string corresponding to the column with patient IDs
@@ -59,12 +54,8 @@ class Preprocessing:
         print("Reading clinical data file...")
         clinical_data = pd.read_csv(self.clinic_data_file, sep=sep, encoding="utf-8-sig")
         self.clinic_data = clinical_data
-        # self.set_index(pat_id_column)
         self.clinic_data.index = self.clinic_data[pat_id_column]
         self.clinic_data = self.clinic_data.loc[:,cd_column]
-        # self.clinic_data = self.clinic_data.reindex(self.exprs.index)
-        # self.exprs = self.exprs[self.clinic_data.isna() == False]
-        # self.clinic_data = self.clinic_data.dropna()
         print("Clinical data successfully load.")
 
 
@@ -99,7 +90,6 @@ class Preprocessing:
         if self.mt == False:
             self.exprs = self.exprs[self.clinic_data.isna() == False]
         elif self.mt == True:
-            # self.exprs = self.exprs[self.clinic_data.notna().any(axis=1) == True]
             self.exprs = self.exprs[self.clinic_data.isna().any(axis=1) == False]
         self.clinic_data = self.clinic_data.dropna()
 
@@ -120,7 +110,7 @@ class Preprocessing:
 
 
 
-    def load_data(self,column_index,gene_id, cd_column,pat_id_column,sep="\t",transpose = True, equal = True):
+    def load_data(self,column_index,gene_id, cd_column,pat_id_column, exp_sep="\t", cli_sep="\t",transpose = True, equal = True):
         """
         Runs previous functions to read all the data.
 
@@ -129,8 +119,8 @@ class Preprocessing:
         equal = False must be used when patient IDs are different between the clinical and expression data
 
         """
-        self.read_exprs_data(column_index,gene_id,sep,transpose)
-        self.read_clinical_data(cd_column,pat_id_column,sep)
+        self.read_exprs_data(column_index,gene_id,exp_sep,transpose)
+        self.read_clinical_data(cd_column,pat_id_column,cli_sep)
         if equal:
             self.set_index()
         elif equal == False:
@@ -217,7 +207,6 @@ class Preprocessing:
     def save_matrices_train_test(self, X_train, X_test, y_train, y_test, root, file_name):
         if not os.path.exists(root):
             os.makedirs(root)
-        i = 0
         X_train_name = os.path.join(root, 'X_train' + file_name + '.csv')
         X_test_name = os.path.join(root, 'X_test' + file_name + '.csv')
         y_train_name = os.path.join(root, 'y_train' + file_name + '.csv')
@@ -258,14 +247,8 @@ class Preprocessing:
             X = self.filter_genes(X,y,features)
         if split == 0:
             print("Total: ", y.count())
-            #print("M: ", y.value_counts()[0])
-            #print("F: ", y.value_counts()[1])
-            # y = y.values.astype(int)
-            # X = X.values.astype(np.float)
             return X, y
         elif split == 1:
-            # X = X.values.astype(np.float)
-            # y = y.values.astype(int)
             if stratify == True:
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y)
             elif stratify == False:

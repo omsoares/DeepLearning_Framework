@@ -324,37 +324,3 @@ class Shallow_multi:
             self.save_best_model()
 
 
-def shallow_multi_selection_split(X_train, X_test, y_train, y_test, root_dir, experiment_designation, cv=5):
-    sm = Shallow_multi(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test, cv=cv)
-    for model in sm.list_models:
-        print(model)
-        model_call = getattr(sm, "model_selection_" + model)
-        # print(model_call)
-        model_call(sm.X_train.astype(np.float), sm.y_train.astype(int), cv)
-        file_name = model + '_' + experiment_designation
-        sm.print_parameter_values()
-        # print(sm.X_test)
-        # print(sm.y_test)
-        # print(sm.model_name)
-        # print(sm.model)
-        scores = sm.evaluate_model(sm.X_test.astype(np.float), sm.y_test.astype(int))
-        sm.write_report(scores, root_dir, file_name)
-        sm.write_cv_results(root_dir, file_name)
-
-
-
-
-def shallow_multi_selection_cv(X, y, root_dir, experiment_designation, cv=5):
-    sm = Shallow_multi(X=X, y=y, cv=cv)
-    for model in sm.list_models:
-        print(model)
-        model_call = getattr(sm, "model_selection_" + model)
-        model_call(sm.X, sm.y, cv)
-        file_name = model + '_' + experiment_designation
-        sm.print_parameter_values()
-        scores_cv_list = sm.calculate_scores_cv(sm.X, sm.y, cv)
-        mean, sd, raw = sm.format_scores_cv(scores_cv_list)
-        sm.write_report_cv(mean, sd, raw, root_dir, file_name)
-        sm.write_cv_results(root_dir, file_name)
-
-
