@@ -40,10 +40,10 @@ class Shallow_bin:
         self.y_test = None
         self.splitted = None
         self.feature_number = None
-        self.list_models = ['lda', 'knn', 'rf', 'lr','svm']
+        self.list_models = ['knn', 'rf', 'lr','svm']
         self.model = None
         self.model_name = None
-        self.scoring = AUC
+        self.scoring = mcc
         #if validate_matrices(kwargs):
         if len(kwargs.keys())<=3:
             self.X = kwargs['X']
@@ -218,8 +218,9 @@ class Shallow_bin:
 
     def model_selection_svm(self, X, y, cv):
         svm = SVC()
-        param_range = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500,
-                       750, 1000]
+        # param_range = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500,
+                       # 750, 1000]
+        param_range= [0.001,0.01,0.1,1,10,100,1000]
         param_grid = [{'C': param_range,
                        'kernel': ['linear']},
                       {'C': param_range,
@@ -242,7 +243,7 @@ class Shallow_bin:
     def model_selection_knn(self, X, y, cv):
         knn = KNeighborsClassifier()
         # creating odd list of K for KNN
-        myList = list(range(1, 5))
+        myList = list(range(1, 7))
         # subsetting just the odd ones
         neighbors = list(filter(lambda x: x % 2 != 0, myList))
         param_grid = [{'n_neighbors': neighbors,
@@ -252,23 +253,24 @@ class Shallow_bin:
         self.model = gs
         self.model_name = 'KNN'
 
-    def model_selection_lda(self, X, y, cv):
-        LDA = LinearDiscriminantAnalysis()
-        myList = list(range(1, 20))
-        # subsetting just the odd ones
-        n_components = list(filter(lambda x: x % 2 != 0, myList))
-        param_grid = [{'n_components': n_components}]
-        gs = GridSearchCV(estimator=LDA, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv)
-        gs.fit(X, y)
-        self.model = gs
-        self.model_name = 'LDA'
+    # def model_selection_lda(self, X, y, cv):
+    #     LDA = LinearDiscriminantAnalysis()
+    #     myList = list(range(1, 20))
+    #     # subsetting just the odd ones
+    #     n_components = list(filter(lambda x: x % 2 != 0, myList))
+    #     param_grid = [{'n_components': n_components}]
+    #     gs = GridSearchCV(estimator=LDA, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv)
+    #     gs.fit(X, y)
+    #     self.model = gs
+    #     self.model_name = 'LDA'
 
     def model_selection_lr(self, X, y, cv):
         LR = LogisticRegression()
         myList = list(range(1, 5))
         param_grid = {
-            'C': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500, 750,
-                  1000],
+            # 'C': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500, 750,
+                  # 1000],
+            "C": [0.001,0.01,0.1,1,10,100,1000],
             'penalty': ['l1', 'l2']}
         gs = GridSearchCV(estimator=LR, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv)
         gs.fit(X, y)
@@ -284,10 +286,6 @@ class Shallow_bin:
             # model_call(self.X_train, self.y_train, cv)
             file_name = model + '_' + experiment_designation
             self.print_parameter_values()
-            # print(self.X_test)
-            # print(self.y_test)
-            # print(self.model_name)
-            # print(self.model)
             scores = self.evaluate_model(self.X_test.values, self.y_test.values)
             # scores = self.evaluate_model(self.X_test, self.y_test)
             self.write_report(scores, root_dir, file_name)

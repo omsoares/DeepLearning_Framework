@@ -1,4 +1,4 @@
-from NBHighThroughput import *
+# from NBHighThroughput import *
 from external_functions import *
 from numpy import *
 from random import choice
@@ -217,6 +217,38 @@ class DNN_MT:
         for key in sorted(self.parameters):
             print(key + ": " + str(self.parameters[key]))
 
+    def write_cv_results(self,cv_means,cv_std,root_dir, file_name):
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        i = 0
+        while os.path.exists(root_dir + file_name + '_report_' + str(i) + '.txt'):
+            i += 1
+        final_path = os.path.join(root_dir, file_name + '_report_' + str(i) + '.txt')
+        print("Writing report file with path: " + final_path)
+        out = open(final_path, 'w')
+        out.write('=' * 25)
+        out.write('\n')
+        out.write('Hyperparameters')
+        out.write('\n')
+        for key in sorted(self.parameters):
+            out.write(key + ": " + str(self.parameters[key]))
+            out.write('\n')
+        out.write('\n')
+        out.write('Scores')
+        out.write('\n')
+        out.write("=" * 25)
+        out.write('\n')
+        out.write("\n")
+        print("Cross validation results:")
+        for end in self.endpoints:
+            for mean,std in zip(cv_means.keys(),cv_std.keys()):
+                if "valid" in mean:
+                    if end in mean:
+                        print(str(end) + ": " + str(cv_means[mean]) + " +/- " + str(cv_std[std]))
+                        out.write(str(end) + ": " + str(cv_means[mean]) + " +/- " + str(cv_std[std]))
+                        out.write('\n')
+        out.close()
+        print("Report file successfully written.")
 
     def fit_model(self, X_train, X_test, y_train, y_test):
         print("Fitting DNN model")
@@ -277,8 +309,8 @@ class DNN_MT:
                 # print(y_pred)
                 # y_pred = [float(np.round(x)) for x in y_pred]
                 y_pred_v2 = np.ravel(y_pred_v1)
-                print(y_test[i])
-                print(y_pred_v2)
+                # print(y_test[i])
+                # print(y_pred_v2)
                 # scores['roc_auc'] = roc_auc_score(y_test, y_pred)
                 scores[str(self.endpoints[i])] = accuracy_score(y_test[i], y_pred_v2)
                 # scores[str(self.endpoints[i]) + "_log_loss"] = log_loss(y_test[i], y_pred[i], labels = np.unique(y_test[i]))
@@ -350,8 +382,10 @@ class DNN_MT:
         train_scores_kf = []
         valid_scores_kf = []
         cv_results = {}
+        cv_std = {}
         i = 0
         for train, valid in kf:
+            print("#" * 35)
             print("Running Fold " + str(i + 1) + str("/") + str(n_folds))
             # print(X)
             # print(y)
@@ -385,7 +419,9 @@ class DNN_MT:
                 valid_scores_list.append(valid_scores_kf[i][endpoint])
             cv_results[endpoint + '_train_score_mean'] = np.mean(train_scores_list)
             cv_results[endpoint + '_valid_score_mean'] = np.mean(valid_scores_list)
-        return cv_results
+            cv_std[endpoint + '_train_score_std'] = np.std(train_scores_list)
+            cv_std[endpoint + '_valid_score_std'] = np.std(valid_scores_list)
+        return cv_results,cv_std
 
     # def cv_test(self,X,y,n_folds = 3,shuffle = True):
     #     # self.set_new_parameters()
@@ -450,10 +486,13 @@ class DNN_MT:
                         temp_values[key] = hold_out_res[key]
             elif cv > 2:
                 kf = self.fold_generator(cv,X)
-                cv_results = self.cv_fit(X,y,n_folds = cv,shuffle= True,kf=kf)
+                cv_results,cv_std = self.cv_fit(X,y,n_folds = cv,shuffle= True,kf=kf)
                 for key in cv_results:
                     if "val" in key:
                         temp_values[key] = cv_results[key]
+                for key in cv_std:
+                    if "val" in key:
+                        temp_values[key] = cv_std[key]
             self.model_selection_history.append(temp_values)
         self.parameters = old_parameters.copy()
         print("Best DNN model successfully selected")
@@ -465,7 +504,8 @@ class DNN_MT:
             for dic in self.model_selection_history:
                 valid_values = []
                 for key in dic:
-                    if "val" in key:
+                    # if "val" in key:
+                    if "valid_score_mean" in key:
                         valid_values.append(dic[key])
                 val_score = np.mean(valid_values)
                 if val_score > max_val_score:
@@ -483,7 +523,8 @@ class DNN_MT:
                 self.parameters[key] = best_model[key]
         valid_values = []
         for key in best_model:
-            if "val" in key:
+            # if "val" in key:
+            if "valid_score_mean" in key:
                 valid_values.append(best_model[key])
         val_score = np.mean(valid_values)
         print("Best model:")
@@ -491,7 +532,7 @@ class DNN_MT:
         print("Average_val_score:" + str(val_score))
 
 
-    def best_model_selection(self,n_iter=2,cv=2):
+    def best_model_selection(self,root_dir, file_name,n_iter=2,cv=2):
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
         # X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
         # kf_folds = self.fold_generator(cv,X_train)
@@ -503,11 +544,13 @@ class DNN_MT:
         y_valid_splt = self.y_splitter(y_valid.values)
         y_test_splt = self.y_splitter(y_test.values)
         self.fit_model(X_train_f,X_valid,y_train_splt,y_valid_splt)
+        print("#" * 20)
         print("Train test results: ")
         self.evaluate_model(X_test,y_test_splt)
-        cv_results = self.cv_fit(X_test,y_test,self.cv)
+        print("#" * 20)
+        cv_results,cv_std = self.cv_fit(self.X,self.y,self.cv)
         # cv_results = self.cv_fit(X_train,y_train, cv)
-        print(cv_results)
+        self.write_cv_results(cv_results,cv_std,root_dir, file_name)
         # y_train_splt = self.y_splitter(y_train_v2.values)
         # y_valid_splt = self.y_splitter(y_valid.values)
         # y_test_splt = self.y_splitter(y_test.values)

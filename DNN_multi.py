@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-from NBHighThroughput import *
+# from NBHighThroughput import *
 from external_functions import *
 from numpy import *
 from random import choice
@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 import time
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
 from keras.models import model_from_json
@@ -122,7 +123,8 @@ class DNN_multi:
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
-        model.compile(loss='sparse_categorical_crossentropy', optimizer=optim, metrics=[matthews_correlation])
+        model.compile(loss='sparse_categorical_crossentropy', optimizer=optim, metrics=['acc'])
+        # model.compile(loss='sparse_categorical_crossentropy', optimizer=optim, metrics=["acc"])
         if self.verbose == 1: str(model.summary())
         self.model = model
         print("DNN model sucessfully created")
@@ -163,6 +165,7 @@ class DNN_multi:
                                               verbose=self.verbose, validation_data=(X_test, y_test))
         fit_time = time.time() - start_time
         print("DNN model successfully fit in ", timer(fit_time))
+        print("#" * 20)
         return fit_time
 
     def print_fit_results(self, train_scores, val_scores):
@@ -188,8 +191,6 @@ class DNN_multi:
         # print(y_pred)
         # y_pred = [float(np.round(x)) for x in y_pred]
         y_pred = np.ravel(y_pred)
-        print(y_pred)
-        print(y_test)
         scores = dict()
         scores['accuracy'] = accuracy_score(y_test, y_pred)
         scores['f1_score'] = f1_score(y_test, y_pred, average = "weighted")
@@ -279,15 +280,19 @@ class DNN_multi:
         # If all models have score 0 assume the first one
         if best_model is None:
             best_model = self.model_selection_history[0]
-        print("Best model:")
-        self.print_parameter_values()
-        print("Matthews correlation: " + str(max_val_matthews_correlation))
-        return best_model
+        # print("Best model:")
+        # self.print_parameter_values()
+        # print("Matthews correlation: " + str(max_val_matthews_correlation))
+        return best_model,max_val_matthews_correlation
 
     def select_best_model(self):
-        best_model = self.find_best_model()
+        best_model, max_val = self.find_best_model()
         for key in self.parameters:
             self.parameters[key] = best_model[key]
+        print("Best model:")
+        self.print_parameter_values()
+        print("Matthews correlation: " + str(max_val))
+
 
     def batch_parameter_shufller(self):
         chosen_param = {}
@@ -351,7 +356,35 @@ class DNN_multi:
         df.to_csv(final_path, sep='\t')
         self.model_selection_results = df
 
-    def write_report(self, mean_scores, sd_scores, raw_scores, root_dir, file_name):
+    def write_report(self, scores, root_dir, file_name):
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        i = 0
+        while os.path.exists(root_dir + file_name + '_report_' + str(
+                i) + '.txt'):
+            i += 1
+        final_path = os.path.join(root_dir, file_name + '_report_' + str(i) + '.txt')
+        print("Writing report file with path: " + final_path)
+        out = open(final_path, 'w')
+        out.write('Hyperparameters')
+        out.write('\n')
+        out.write('=' * 25)
+        out.write('\n')
+        for key in sorted(self.parameters):
+            out.write(key + ": " + str(self.parameters[key]))
+            out.write('\n')
+        out.write('\n')
+        out.write('Scores')
+        out.write('\n')
+        out.write("=" * 25)
+        out.write('\n')
+        for metric, score in scores.items():
+            out.write(str(metric) + ': ' + str(score))
+            out.write('\n')
+        out.close()
+        print("Report file successfully written.")
+
+    def write_report_cv(self, mean_scores, sd_scores, raw_scores, root_dir, file_name):
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -401,7 +434,7 @@ class DNN_multi:
         cv_scores, cv_history, time_fit = self.cv_fit(self.X, self.y, cv)
         self.plot_model_performance(cv_history, root_dir, file_name)
         mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
-        self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
+        self.write_report_cv(mean_scores, sd_scores, raw_scores, root_dir, file_name)
         time_fit = np.asarray(time_fit, dtype=float)
         del self.model
 
@@ -442,10 +475,14 @@ class DNN_multi:
         self.select_best_model()
         self.create_DNN_model()
         # cv_scores, cv_history, time_fit = self.cv_fit(self.X_test.values, self.y_test.values, cv)
-        cv_scores, cv_history, time_fit = self.cv_fit(self.X_test.values, self.y_test.values, cv)
-        self.plot_model_performance(cv_history, root_dir, file_name)
-        mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
-        self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
+        # cv_scores, cv_history, time_fit = self.cv_fit(self.X_test.values, self.y_test.values, cv)
+        # self.plot_model_performance(cv_history, root_dir, file_name)
+        # mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
+        # self.write_report_cv(mean_scores, sd_scores, raw_scores, root_dir, file_name)
+        X_train, X_valid, y_train, y_valid = train_test_split(self.X_train, self.y_train, test_size=0.25, stratify=self.y_train)
+        self.fit_model(X_train=X_train.values, X_test=X_valid.values, y_train=y_train.values, y_test=y_valid.values)
+        scores = self.evaluate_model(X_test=self.X_test.values, y_test=self.y_test.values)
+        self.write_report(scores,root_dir,experiment_designation)
         self.save_best_model()
 
     def multi_model_selection_cv(self, root_dir, experiment_designation, n_iter=100, cv=10):
@@ -457,5 +494,5 @@ class DNN_multi:
         cv_scores, cv_history, time_fit = self.cv_fit(self.X.values, self.y.values, cv)
         self.plot_model_performance(cv_history, root_dir, file_name)
         mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
-        self.write_report(mean_scores, sd_scores, raw_scores, root_dir, file_name)
+        self.write_report_cv(mean_scores, sd_scores, raw_scores, root_dir, file_name)
         self.save_best_model()

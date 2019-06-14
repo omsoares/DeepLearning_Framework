@@ -8,7 +8,7 @@ from DNN_reg import *
 from external_functions import *
 import sys
 from sklearn.datasets import load_breast_cancer, load_wine,load_diabetes
-from DNN_MT_bin import *
+# from DNN_MT_bin import *
 # from DNN_MT_all import *
 from DNN_MT import *
 
@@ -17,8 +17,14 @@ from DNN_MT import *
 """ CCLE """
 
 # rna_seq = Preprocessing("CCLE_RNAseq_rsem_genes_tpm_20180929.txt","CCLE_metabolomics_20190502.csv",mt = False)
-
+#
 # rna_seq.load_data(2,"gene_id","citrate","CCLE_ID", cli_sep=",")
+#
+# X,y = rna_seq.split_dataset(split=0, normalize_method=None, filt_method="variance",variance = 250, test_size=0.3,stratify= False)
+#
+# shallow = Shallow_reg(X=X, y=y, cv=5)
+#
+# shallow.multi_model_selection_cv("CCLE","citrate_first_try",cv=3)
 
 
 '''
@@ -42,36 +48,43 @@ Test with METABRIC Dataset
 # # '''
 rna_seq = Preprocessing("data_mRNA_median_Zscores.txt","clinical_data", mt=False)
 #
-# rna_seq.load_data(2, "Hugo_Symbol", "GRADE", "PATIENT_ID")
+rna_seq.load_data(2, "Hugo_Symbol", "THREEGENE", "PATIENT_ID")
 #
+# rna_seq.load_data(2, "Hugo_Symbol", ["ER_STATUS","THREEGENE"], "PATIENT_ID")
 #
-rna_seq.load_data(2, "Hugo_Symbol", "OS_MONTHS", "PATIENT_ID")
+rna_seq.nom_to_num()
 #
-# rna_seq.nom_to_num()
-#
-X,y = rna_seq.split_dataset(split=0,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
+# X,y = rna_seq.split_dataset(split=0,normalize_method = None,filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = False)
+X_train,X_test,y_train,y_test = rna_seq.split_dataset(split=1,normalize_method = None,filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = True)
 #
 #
 parameters_batch = {
             'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
             'optimization': ['Adadelta', 'Adam', 'RMSprop'],
-            'learning_rate': [0.015, 0.010, 0.005, 0.001],
+            'learning_rate': [0.015, 0.010, 0.005, 0.001,0.0001],
             'batch_size': [16, 32, 64, 128, 256],
-            'nb_epoch': [200],
+            'nb_epoch': [100,150,200],
             'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
                                        [2500, 100], [2500, 500]],
             'units_in_input_layer': [5000],
-            'early_stopping': [True],
+            'early_stopping': [True,False],
             'patience': [80]
         }
 
-shallow = Shallow_reg(X = X, y = y, cv=5)
 
-shallow.multi_model_selection_cv("OS_MONTHS_metabric","shallow_first_try",cv=5)
+dnn = DNN_multi(X_train=X_train,X_test=X_test,y_train=y_train,y_test=y_test,parameters_batch=parameters_batch,cv=5)
 
-# dnn = DNN_reg(X = X, y = y, cv=5, parameters_batch = parameters_batch)
+dnn.multi_model_selection("THREEGENE","First_try",n_iter=50,cv=3)
+# shallow = Shallow_reg(X = X, y = y, cv=5)
+#
+# shallow.multi_model_selection_cv("OS_MONTHS_metabric","shallow_first_try",cv=5)
+# endpoints = ["ER_STATUS","THREEGENE"]
 
-# dnn.multi_model_selection_cv("OS_MONTHS","dnn_first_try",n_iter = 15, cv = 5)
+# types = ["bin","multi"]
+
+# dnn = DNN_MT(X = X, y = y, cv=3, parameters_batch = parameters_batch, endpoints= endpoints, types= types)
+#
+# dnn.best_model_selection("DNN_MT","ER_THREE_first",n_iter = 1, cv = 3)
 
 
 
@@ -114,7 +127,7 @@ Test with Neuroblastoma dataset
 #
 # # rna_seq.read_clinical_data("Sex_Imputed","NB ID")
 #
-# rna_seq.load_data(4, "#Gene", "Sex_Imputed","NB ID",equal=False)
+# rna_seq.load_data(4, "#Gene", "INSS_Stage","NB ID",equal=False)
 #
 # rna_seq.load_data(4, "#Gene", ["Sex_Imputed","INSS_Stage"],"NB ID",equal=False)
 #
@@ -140,6 +153,9 @@ Test with Neuroblastoma dataset
 # types = ['bin','multi']
 # #
 # dnn_mt = DNN_MT(X = X, y = y, cv= 3, parameters_batch= parameters_batch,endpoints=endpoints, types = types)
+# dnn_mt = DNN_multi(X = X, y = y, cv= 3, parameters_batch= parameters_batch)
+# dnn_mt.multi_model_selection_cv("Neurobl_multi","Neuroblastoma_multi_INSS",n_iter=1,cv=3)
+
 # #
 # dnn_mt.multiple_y(endpoints)
 #

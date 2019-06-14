@@ -4,6 +4,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.metrics import confusion_matrix
 
 
 def validate_matrices(kwargs):
@@ -57,6 +58,7 @@ def matthews_correlation(y_true, y_pred):
     numerator = (tp * tn - fp * fn)
     denominator = K.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
     return numerator / (denominator + K.epsilon())
+
 
 
 def precision_k(y_true, y_pred):

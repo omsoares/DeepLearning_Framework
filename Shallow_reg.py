@@ -42,7 +42,7 @@ class Shallow_reg:
         self.splitted = None
         self.feature_number = None
         # O LR foi retirada por ser possível fazer grid search e as rfs porque não correrem
-        self.list_models = ['knn','mlp','ada','rf','svm']
+        self.list_models = ['knn','mlp','rf','svm']
         self.model = None
         self.model_name = None
         self.scoring = r2_metric
@@ -231,8 +231,9 @@ class Shallow_reg:
 
     def model_selection_svm(self, X, y, cv):
         svm = SVR()
-        param_range = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500,
-                       750, 1000]
+        # param_range = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500,
+        #                750, 1000]
+        param_range = [0.001,0.01,0.1,1,10,100,1000]
         param_grid = [{'C': param_range,
                        'kernel': ['linear']},
                       {'C': param_range,
@@ -245,7 +246,7 @@ class Shallow_reg:
 
     def model_selection_rf(self, X, y, cv):
         rf = RandomForestRegressor()
-        n_estimators = [10, 50, 100, 200]
+        n_estimators = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
         param_grid = [{'n_estimators': n_estimators}]
         gs = GridSearchCV(estimator=rf, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
         gs.fit(X, y)
@@ -253,20 +254,20 @@ class Shallow_reg:
         self.model = gs
         self.model_name = 'RF'
 
-    def model_selection_ada(self, X, y, cv):
-        ada = AdaBoostRegressor()
-        n_estimators = [10, 50, 100, 200]
-        learning_rate = [1, 0.1, 0.01, 0.001, 0.0001]
-        param_grid = [{'learning_rate': learning_rate, 'n_estimators':n_estimators}]
-        gs = GridSearchCV(estimator=ada, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
-        gs.fit(X, y)
-        self.model = gs
-        self.model_name = 'ADABOOST'
+    # def model_selection_ada(self, X, y, cv):
+    #     ada = AdaBoostRegressor()
+    #     n_estimators = [10, 50, 100, 200]
+    #     learning_rate = [1, 0.1, 0.01, 0.001, 0.0001]
+    #     param_grid = [{'learning_rate': learning_rate, 'n_estimators':n_estimators}]
+    #     gs = GridSearchCV(estimator=ada, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
+    #     gs.fit(X, y)
+    #     self.model = gs
+    #     self.model_name = 'ADABOOST'
 
     def model_selection_knn(self, X, y, cv):
         knn = KNeighborsRegressor()
         # creating odd list of K for KNN
-        myList = list(range(1, 5))
+        myList = list(range(1, 7))
         # subsetting just the odd ones
         neighbors = list(filter(lambda x: x % 2 != 0, myList))
         param_grid = [{'n_neighbors': neighbors,
@@ -279,7 +280,7 @@ class Shallow_reg:
     def model_selection_mlp(self, X, y, cv):
         mlp = MLPRegressor()
         hidden_layer_sizes = [(20,),(50,),(100,),(250,),(500,)]
-        activation = ['tanh','relu']
+        activation = 'relu'
         solver = ['lbfgs', 'sgd', 'adam']
         learning_rate = ['constant','invscaling','adaptive']
         param_grid = [{'hidden_layer_sizes': hidden_layer_sizes,
