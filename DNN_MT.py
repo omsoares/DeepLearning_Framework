@@ -82,17 +82,17 @@ class DNN_MT:
         self.parameters_batch = kwargs["parameters_batch"]
         self.types = kwargs["types"]
         self.loss_weights = None
-        self.endpoints = kwargs["endpoints"]
-        self.endpoints_number = len(self.endpoints)
+        self.labels = kwargs["labels"]
+        self.labels_number = len(self.labels)
 
-    # def multiple_y(self,endpoints):
+    # def multiple_y(self,labels):
     #     if self.splitted == True:
     #         self.y_train_list = []
     #         self.y_test_list = []
     #     elif self.splitted == False:
     #         self.y_list = []
-    #     self.insert_endpoints(endpoints)
-    #     for i in range(self.endpoints_number):
+    #     self.insert_labels(labels)
+    #     for i in range(self.labels_number):
     #         if self.splitted == True:
     #             end_train = self.y_train.iloc[:,i]
     #             end_test = self.y_test.iloc[:,i]
@@ -102,9 +102,9 @@ class DNN_MT:
     #             end = self.y.iloc[:,i]
     #             self.y_list.append(end)
 
-    def insert_endpoints(self,endpoints):
-        self.endpoints = endpoints
-        self.endpoints_number = len(endpoints)
+    def insert_labels(self,labels):
+        self.labels = labels
+        self.labels_number = len(labels)
 
     def insert_loss_weights(self,loss_weights):
         self.loss_weights = loss_weights
@@ -134,7 +134,7 @@ class DNN_MT:
         self.print_parameter_values()
         # Input layer
         # input = Input(shape=(self.parameters['units_in_input_layer'],),name = "inputs")
-        input = Input(shape=(self.feature_number,),name = "inputs")
+        input = Input(shape=(self.feature_number,), name = "inputs")
         # constructing all hidden layers
         for units,i in zip(self.parameters['units_in_hidden_layers'],range(len(self.parameters['units_in_hidden_layers']))):
             if i == 0:
@@ -152,7 +152,7 @@ class DNN_MT:
                 output_activation = "sigmoid"
             elif type[1] == "multi":
                 if self.splitted == True:
-                    units = len(self.y_train[type[0]].unique())
+                    units = len(self.y_train.iloc[:,type[0]].unique())
                 elif self.splitted == False:
                     units = len(self.y.iloc[:,type[0]].unique())
                 output_activation = "softmax"
@@ -160,7 +160,7 @@ class DNN_MT:
                 units = 1
                 # output_activation = "linear"
                 output_activation = None
-            output_name = self.endpoints[type[0]]
+            output_name = self.labels[type[0]]
             output_dict[output_name] = Dense(units, activation=output_activation, name=output_name)(x)
             output_list.append(output_name)
 
@@ -175,7 +175,7 @@ class DNN_MT:
         #             units = len(self.y[output[0]].unique())
         #     elif self.parameters['types'][output[0]] == "reg":
         #         units = 1
-        #     output_name = self.endpoints[output[0]] + "_output"
+        #     output_name = self.labels[output[0]] + "_output"
         #     # constructing the final layer - Multi task DNN.
         #     output_dict[output_name] = Dense(units, activation= output[1], name = output_name)(x)
         #     output_list.append(output_name)
@@ -192,10 +192,8 @@ class DNN_MT:
 
         if self.parameters['optimization'] == 'SGD':
             optim = SGD(lr=self.parameters['learning_rate'])
-            # optim.lr.set_value(self.parameters['learning_rate'])
         elif self.parameters['optimization'] == 'RMSprop':
             optim = RMSprop(lr= self.parameters['learning_rate'])
-            # optim.lr.set_value(self.parameters['learning_rate'])
         elif self.parameters['optimization'] == 'Adam':
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
@@ -208,8 +206,6 @@ class DNN_MT:
             model.compile(optimizer=optim, loss = list(loss_dict.values()),metrics = list(metrics_dict.values()))
         if self.verbose == 1: str(model.summary())
         self.model = model
-        # self.multiple_y(self.endpoints)
-        # self.generate_y_dicts()
         print("DNN model sucessfully created")
 
     def print_parameter_values(self):
@@ -217,7 +213,7 @@ class DNN_MT:
         for key in sorted(self.parameters):
             print(key + ": " + str(self.parameters[key]))
 
-    def write_cv_results(self,cv_means,cv_std,root_dir, file_name):
+    def write_cv_results(self,cv_means,cv_std,cv_results,root_dir, file_name):
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -240,7 +236,7 @@ class DNN_MT:
         out.write('\n')
         out.write("\n")
         print("Cross validation results:")
-        for end in self.endpoints:
+        for end in self.labels:
             for mean,std in zip(cv_means.keys(),cv_std.keys()):
                 if "valid" in mean:
                     if end in mean:
@@ -248,7 +244,46 @@ class DNN_MT:
                         out.write(str(end) + ": " + str(cv_means[mean]) + " +/- " + str(cv_std[std]))
                         out.write('\n')
         out.close()
+        df = pd.DataFrame.from_dict(cv_results)
+        cv_df_path = os.path.join(root_dir, file_name + '_cv_results_' + str(i) + '.csv')
+        print('Writing csv file with path: ', cv_df_path)
+        df_f = df.transpose()
+        df_f.to_csv(cv_df_path, sep='\t', header= False)
+        print("Report files successfully written.")
+
+    def write_hold_out_results(self,scores,root_dir, file_name):
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        i = 0
+        while os.path.exists(root_dir + file_name + '_report_' + str(i) + '.txt'):
+            i += 1
+        final_path = os.path.join(root_dir, file_name + '_report_' + str(i) + '.txt')
+        print("Writing report file with path: " + final_path)
+        out = open(final_path, 'w')
+        out.write('=' * 25)
+        out.write('\n')
+        out.write('Hyperparameters')
+        out.write('\n')
+        for key in sorted(self.parameters):
+            out.write(key + ": " + str(self.parameters[key]))
+            out.write('\n')
+        out.write('\n')
+        out.write('Scores')
+        out.write('\n')
+        out.write("=" * 25)
+        out.write('\n')
+        out.write("\n")
+        print("Hold out results:")
+        for end in self.labels:
+            for metric in scores.keys():
+                if "valid" in metric:
+                    if end in metric:
+                        print(str(end) + ": " + str(scores[metric]))
+                        out.write(str(end) + ": " + str(scores[metric]))
+                        out.write('\n')
+        out.close()
         print("Report file successfully written.")
+
 
     def fit_model(self, X_train, X_test, y_train, y_test):
         print("Fitting DNN model")
@@ -269,11 +304,11 @@ class DNN_MT:
         return fit_time
 
     # def print_fit_results(self, train_scores, val_scores):
-    #     for score in range(self.endpoints_number):
-    #         print("Metrics for endpoint" + " " + self.endpoints[score])
-    #         print('val_accuracy: ', val_scores[self.endpoints[score]])
+    #     for score in range(self.labels_number):
+    #         print("Metrics for label" + " " + self.labels[score])
+    #         print('val_accuracy: ', val_scores[self.labels[score]])
     #         # print('val_loss: ', val_scores[0])
-    #         print('train_accuracy: ', train_scores[self.endpoints[score]])
+    #         print('train_accuracy: ', train_scores[self.labels[score]])
     #         # print('train_loss: ', train_scores[0])
     #         print("train/val loss ratio: ", min(self.history.history['loss']) / min(self.history.history['val_loss']))
 
@@ -286,43 +321,29 @@ class DNN_MT:
     def evaluate_model(self, X_test, y_test):
         # print("Evaluating model with hold out test set.")
         y_pred = self.model.predict(X_test)
-        # print(y_test)
-        # print(y_pred)
         # y_pred = [float(np.round(x)) for x in y_pred]
         # y_pred = np.ravel(y_pred)
-        # print(y_pred)
-        # print(y_test)
         scores = dict()
-        for i in range(self.endpoints_number):
+        for i in range(self.labels_number):
             if self.types[i] == "bin":
-                # print(y_pred)
-                # print(type(y_pred))
-                # print(y_pred[i])
                 y_pred_v1 = [float(np.round(x)) for x in y_pred[i]]
                 y_pred_v2 = np.ravel(y_pred_v1)
-                # print(y_test[i])
-                # print(y_pred_v2)
-                scores[str(self.endpoints[i])] = accuracy_score(y_test[i], y_pred_v2)
-                # scores[str(self.endpoints[i]) + "_log_loss"] = log_loss(y_test[i], y_pred_v2)
+                scores[str(self.labels[i])] = accuracy_score(y_test[i], y_pred_v2)
+                # scores[str(self.labels[i]) + "_log_loss"] = log_loss(y_test[i], y_pred_v2)
             elif self.types[i]  == "multi":
                 y_pred_v1 = [int(np.argmax(x)) for x in y_pred[i]]
-                # print(y_pred)
                 # y_pred = [float(np.round(x)) for x in y_pred]
                 y_pred_v2 = np.ravel(y_pred_v1)
-                # print(y_test[i])
-                # print(y_pred_v2)
                 # scores['roc_auc'] = roc_auc_score(y_test, y_pred)
-                scores[str(self.endpoints[i])] = accuracy_score(y_test[i], y_pred_v2)
-                # scores[str(self.endpoints[i]) + "_log_loss"] = log_loss(y_test[i], y_pred[i], labels = np.unique(y_test[i]))
+                scores[str(self.labels[i])] = accuracy_score(y_test[i], y_pred_v2)
+                # scores[str(self.labels[i]) + "_log_loss"] = log_loss(y_test[i], y_pred[i], labels = np.unique(y_test[i]))
                 # scores['f1_score'] = f1_score(y_test, y_pred)
                 # scores['mcc'] = matthews_corrcoef(y_test, y_pred)
                 # scores['precision'] = precision_score(y_test, y_pred)
                 # scores['recall'] = recall_score(y_test, y_pred)
                 # scores['log_loss'] = log_loss(y_test, y_pred)
             elif self.types[i] == "reg":
-                # print(y_test[i])
-                # print(y_pred[i])
-                scores[str(self.endpoints[i])] = r2_score(y_test[i], y_pred[i])
+                scores[str(self.labels[i])] = r2_score(y_test[i], y_pred[i])
         for metric, score in scores.items():
             print(metric + ': ' + str(score))
         return scores
@@ -339,12 +360,6 @@ class DNN_MT:
         for key in new_parameters:
             dnn_parameters[key] = new_parameters[key]
         self.parameters = dnn_parameters
-
-
-    # def val_data_generator(self,X,y,test_size=0.25):
-    #     X_train, X_val, y_train,y_val = train_test_split(X,y,test_size= test_size,shuffle= True)
-    #     return X_train,X_val,y_train,y_val
-
 
     def y_splitter(self,y):
         y_list = []
@@ -363,9 +378,9 @@ class DNN_MT:
         train_scores = self.evaluate_model(X_train, y_train_splt)
         print("Validation scores:")
         valid_scores = self.evaluate_model(X_valid, y_valid_splt)
-        for endpoint in self.endpoints:
-            res[endpoint + "_train_score: "] = train_scores[endpoint]
-            res[endpoint + "_valid_score: "] = valid_scores[endpoint]
+        for label in self.labels:
+            res[label + "_train_score: "] = train_scores[label]
+            res[label + "_valid_score: "] = valid_scores[label]
         return res
 
     def fold_generator(self,n_folds,X):
@@ -379,9 +394,10 @@ class DNN_MT:
             kf = skf.split(X)
         self.create_DNN_model()
         init_weights = self.model.get_weights()
+        cv_results = {}
         train_scores_kf = []
         valid_scores_kf = []
-        cv_results = {}
+        cv_means = {}
         cv_std = {}
         i = 0
         for train, valid in kf:
@@ -411,17 +427,18 @@ class DNN_MT:
         # print(self.model.metrics)
         # print(train_scores_kf)
         # print(valid_scores_kf)
-        for endpoint in self.endpoints:
+        for label in self.labels:
             train_scores_list = []
             valid_scores_list = []
             for i in range(n_folds):
-                train_scores_list.append(train_scores_kf[i][endpoint])
-                valid_scores_list.append(valid_scores_kf[i][endpoint])
-            cv_results[endpoint + '_train_score_mean'] = np.mean(train_scores_list)
-            cv_results[endpoint + '_valid_score_mean'] = np.mean(valid_scores_list)
-            cv_std[endpoint + '_train_score_std'] = np.std(train_scores_list)
-            cv_std[endpoint + '_valid_score_std'] = np.std(valid_scores_list)
-        return cv_results,cv_std
+                train_scores_list.append(train_scores_kf[i][label])
+                valid_scores_list.append(valid_scores_kf[i][label])
+            cv_means[label + '_train_score_mean'] = np.mean(train_scores_list)
+            cv_means[label + '_valid_score_mean'] = np.mean(valid_scores_list)
+            cv_std[label + '_train_score_std'] = np.std(train_scores_list)
+            cv_std[label + '_valid_score_std'] = np.std(valid_scores_list)
+            cv_results[label] = valid_scores_list
+        return cv_means,cv_std,cv_results
 
     # def cv_test(self,X,y,n_folds = 3,shuffle = True):
     #     # self.set_new_parameters()
@@ -458,14 +475,14 @@ class DNN_MT:
     #     # print(self.model.metrics)
     #     print(train_scores_kf)
     #     print(valid_scores_kf)
-    #     for endpoint in self.endpoints:
+    #     for label in self.labels:
     #         train_scores_list = []
     #         valid_scores_list = []
     #         for i in range(n_folds):
-    #             train_scores_list.append(train_scores_kf[i][endpoint])
-    #             valid_scores_list.append(valid_scores_kf[i][endpoint])
-    #         cv_results[endpoint + '_train_score_mean'] = np.mean(train_scores_list)
-    #         cv_results[endpoint + '_valid_score_mean'] = np.mean(valid_scores_list)
+    #             train_scores_list.append(train_scores_kf[i][label])
+    #             valid_scores_list.append(valid_scores_kf[i][label])
+    #         cv_results[label + '_train_score_mean'] = np.mean(train_scores_list)
+    #         cv_results[label + '_valid_score_mean'] = np.mean(valid_scores_list)
     #     return cv_results
 
     def model_selection(self,X,y,n_iter=2,cv=3):
@@ -486,14 +503,17 @@ class DNN_MT:
                         temp_values[key] = hold_out_res[key]
             elif cv > 2:
                 kf = self.fold_generator(cv,X)
-                cv_results,cv_std = self.cv_fit(X,y,n_folds = cv,shuffle= True,kf=kf)
-                for key in cv_results:
+                cv_means,cv_std,cv_results = self.cv_fit(X,y,n_folds = cv,shuffle= True,kf=kf)
+                for key in cv_means:
                     if "val" in key:
-                        temp_values[key] = cv_results[key]
+                        temp_values[key] = cv_means[key]
                 for key in cv_std:
                     if "val" in key:
                         temp_values[key] = cv_std[key]
             self.model_selection_history.append(temp_values)
+            K.clear_session()
+            del self.history
+            del self.model
         self.parameters = old_parameters.copy()
         print("Best DNN model successfully selected")
 
@@ -531,26 +551,33 @@ class DNN_MT:
         self.print_parameter_values()
         print("Average_val_score:" + str(val_score))
 
+    def multi_model_selection(self,root_dir, file_name,n_iter=2,cv=2):
+        self.model_selection(self.X_train,self.y_train,n_iter=n_iter,cv=cv)
+        self.select_best_model()
+        self.create_DNN_model()
+        X_train_f,X_valid,y_train_f,y_valid = train_test_split(self.X_train,self.y_train,test_size=0.3,shuffle=True)
+        y_train_splt = self.y_splitter(y_train_f.values)
+        y_valid_splt = self.y_splitter(y_valid.values)
+        y_test_splt = self.y_splitter(self.y_test.values)
+        self.fit_model(X_train_f,X_valid,y_train_splt,y_valid_splt)
+        print("#" * 20)
+        print("Train test results: ")
+        scores = self.evaluate_model(self.X_test,y_test_splt)
+        print("#" * 20)
+        self.write_hold_out_results(scores, root_dir, file_name)
+        self.save_best_model()
 
-    def best_model_selection(self,root_dir, file_name,n_iter=2,cv=2):
+    def multi_model_selection_cv(self,root_dir, file_name,n_iter=2,cv=2):
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
         # X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
         # kf_folds = self.fold_generator(cv,X_train)
         self.model_selection(X_train,y_train,n_iter=n_iter,cv=cv)
         self.select_best_model()
         self.create_DNN_model()
-        X_train_f,X_valid,y_train_f,y_valid = train_test_split(X_train,y_train,test_size=0.3,shuffle=True)
-        y_train_splt = self.y_splitter(y_train_f.values)
-        y_valid_splt = self.y_splitter(y_valid.values)
-        y_test_splt = self.y_splitter(y_test.values)
-        self.fit_model(X_train_f,X_valid,y_train_splt,y_valid_splt)
-        print("#" * 20)
-        print("Train test results: ")
-        self.evaluate_model(X_test,y_test_splt)
-        print("#" * 20)
-        cv_results,cv_std = self.cv_fit(self.X,self.y,self.cv)
+        # X_train_f,X_valid,y_train_f,y_valid = train_test_split(X_train,y_train,test_size=0.3,shuffle=True)
+        cv_means,cv_std,cv_results = self.cv_fit(self.X,self.y,self.cv)
         # cv_results = self.cv_fit(X_train,y_train, cv)
-        self.write_cv_results(cv_results,cv_std,root_dir, file_name)
+        self.write_cv_results(cv_means,cv_std,cv_results,root_dir, file_name)
         # y_train_splt = self.y_splitter(y_train_v2.values)
         # y_valid_splt = self.y_splitter(y_valid.values)
         # y_test_splt = self.y_splitter(y_test.values)
