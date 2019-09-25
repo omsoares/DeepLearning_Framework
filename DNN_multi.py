@@ -123,7 +123,7 @@ class DNN_multi:
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
-        model.compile(loss='sparse_categorical_crossentropy', optimizer=optim, metrics=['acc'])
+        model.compile(loss='sparse_categorical_crossentropy', optimizer=optim, metrics=['accuracy'])
         # model.compile(loss='sparse_categorical_crossentropy', optimizer=optim, metrics=["acc"])
         if self.verbose == 1: str(model.summary())
         self.model = model
@@ -137,7 +137,7 @@ class DNN_multi:
             cvhistory = []
             time_fit = []
             i = 0
-            skf = StratifiedKFold(n_splits=cv, shuffle=False)
+            skf = StratifiedKFold(n_splits=cv, shuffle=True)
             for train, valid in skf.split(X, y):
                 print("Running Fold " + str(i + 1) + str("/") + str(cv))
                 X_train, X_valid = X[train], X[valid]
@@ -169,9 +169,9 @@ class DNN_multi:
         return fit_time
 
     def print_fit_results(self, train_scores, val_scores):
-        print('val_matthews_correlation: ', val_scores[1])
+        print('val_accuracy: ', val_scores[1])
         print('val_loss: ', val_scores[0])
-        print('train_matthews_correlation: ', train_scores[1])
+        print('train_accuracy: ', train_scores[1])
         print('train_loss: ', train_scores[0])
         print("train/val loss ratio: ", min(self.history.history['loss']) / min(self.history.history['val_loss']))
 
@@ -222,9 +222,9 @@ class DNN_multi:
         old_parameters = self.parameters.copy()
         self.model_selection_history = []
         for iteration in range(n_iter_search):
-            mean_train_matthews_correlation = []
+            mean_train_accuracy = []
             mean_train_loss = []
-            mean_val_matthews_correlation = []
+            mean_val_accuracy = []
             mean_val_loss = []
             mean_time_fit = []
             print("Iteration no. " + str(iteration + 1))
@@ -243,26 +243,29 @@ class DNN_multi:
                 self.create_DNN_model()
                 time_fit = self.fit_model(X_train, X_valid, y_train, y_valid)
                 train_scores = self.model.evaluate(X_train, y_train)
-                train_matthews_correlation = train_scores[1]
+                train_accuracy = train_scores[1]
                 train_loss = train_scores[0]
                 val_scores = self.model.evaluate(X_valid, y_valid)
-                val_matthews_correlation = val_scores[1]
+                val_accuracy = val_scores[1]
                 val_loss = val_scores[0]
                 self.print_fit_results(train_scores, val_scores)
-                mean_train_matthews_correlation.append(train_matthews_correlation)
+                mean_train_accuracy.append(train_accuracy)
                 mean_train_loss.append(train_loss)
-                mean_val_matthews_correlation.append(val_matthews_correlation)
+                mean_val_accuracy.append(val_accuracy)
                 mean_val_loss.append(val_loss)
                 mean_time_fit.append(time_fit)
-                temp_values['train_matthews_correlation_' + str(i + 1)] = train_matthews_correlation
+                temp_values['train_accuracy_' + str(i + 1)] = train_accuracy
                 temp_values['train_loss_' + str(i + 1)] = train_loss
-                temp_values['val_matthews_correlation_' + str(i + 1)] = val_matthews_correlation
+                temp_values['val_accuracy_' + str(i + 1)] = val_accuracy
                 temp_values['val_loss_' + str(i + 1)] = val_loss
                 temp_values['time_fit_' + str(i + 1)] = time_fit
                 i += 1
-            temp_values['mean_train_matthews_correlation'] = np.mean(mean_train_matthews_correlation)
+                K.clear_session()
+                del self.history
+                del self.model
+            temp_values['mean_train_accuracy'] = np.mean(mean_train_accuracy)
             temp_values['mean_train_loss'] = np.mean(mean_train_loss)
-            temp_values['mean_val_matthews_correlation'] = np.mean(mean_val_matthews_correlation)
+            temp_values['mean_val_accuracy'] = np.mean(mean_val_accuracy)
             temp_values['mean_val_loss'] = np.mean(mean_val_loss)
             temp_values['mean_time_fit'] = np.mean(mean_time_fit)
             self.model_selection_history.append(temp_values)
@@ -272,18 +275,18 @@ class DNN_multi:
     def find_best_model(self):
         if self.model_selection_history:
             best_model = None
-            max_val_matthews_correlation = 0
+            max_val_accuracy = 0
             for dic in self.model_selection_history:
-                if dic['mean_val_matthews_correlation'] > max_val_matthews_correlation:
+                if dic['mean_val_accuracy'] > max_val_accuracy:
                     best_model = dic
-                    max_val_matthews_correlation = dic['mean_val_matthews_correlation']
+                    max_val_accuracy = dic['mean_val_accuracy']
         # If all models have score 0 assume the first one
         if best_model is None:
             best_model = self.model_selection_history[0]
         # print("Best model:")
         # self.print_parameter_values()
-        # print("Matthews correlation: " + str(max_val_matthews_correlation))
-        return best_model,max_val_matthews_correlation
+        # print("Accuracy: " + str(max_val_accuracy))
+        return best_model,max_val_accuracy
 
     def select_best_model(self):
         best_model, max_val = self.find_best_model()
@@ -291,7 +294,7 @@ class DNN_multi:
             self.parameters[key] = best_model[key]
         print("Best model:")
         self.print_parameter_values()
-        print("Matthews correlation: " + str(max_val))
+        print("Accuracy: " + str(max_val))
 
 
     def batch_parameter_shufller(self):
@@ -319,11 +322,11 @@ class DNN_multi:
         ## With each iteration the error reduces smoothly
         fig.add_subplot(122)
         for record in cv_history:
-            plt.plot(record.history['matthews_correlation'], color='blue')
-            plt.plot(record.history['val_matthews_correlation'], color='orange')
+            plt.plot(record.history['acc'], color='blue')
+            plt.plot(record.history['val_acc'], color='orange')
             plt.legend(['train', 'test'], loc='upper left')
-        plt.title('model matthews correlation')
-        plt.ylabel('matthews correlation')
+        plt.title('model accuracy')
+        plt.ylabel('accuracy')
         plt.xlabel('epoch')
         if save_fig:
             if not os.path.exists(root_dir):
@@ -338,14 +341,14 @@ class DNN_multi:
 
     def write_model_selection_results(self, root_dir, file_name):
         d = self.model_selection_history
-        sequence = ['mean_val_matthews_correlation', 'mean_val_loss', 'mean_train_matthews_correlation',
+        sequence = ['mean_val_accuracy', 'mean_val_loss', 'mean_train_accuracy',
                     'mean_train_loss', 'mean_time_fit']
         sequence_tv_scores = [key for key in d[0] if key.startswith(("train_", "val_", "time_"))]
         sequence_tv_scores.sort()
         sequence_parameters = [x for x in self.parameters]
         sequence_parameters.sort()
         sequence.extend(sequence_tv_scores + sequence_parameters)
-        df = pd.DataFrame(d, columns=sequence).sort_values(['mean_val_matthews_correlation'], ascending=[False])
+        df = pd.DataFrame(d, columns=sequence).sort_values(['mean_val_accuracy'], ascending=[False])
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0

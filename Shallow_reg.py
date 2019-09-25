@@ -8,12 +8,13 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold, KFold
 from sklearn.decomposition import PCA
 from sklearn.externals import joblib
 from sklearn.svm import SVR
-from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.neural_network import MLPRegressor
+from sklearn.linear_model import ElasticNet
 from sklearn.metrics import matthews_corrcoef, make_scorer
 mcc = make_scorer(matthews_corrcoef, greater_is_better=True)
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+import os
 
 r2_metric = make_scorer(r2_score, greater_is_better= True)
 
@@ -41,8 +42,7 @@ class Shallow_reg:
         self.y_test = None
         self.splitted = None
         self.feature_number = None
-        # O LR foi retirada por ser possível fazer grid search e as rfs porque não correrem
-        self.list_models = ['knn','mlp','rf','svm']
+        self.list_models = ['en','rf','knn','svm']
         self.model = None
         self.model_name = None
         self.scoring = r2_metric
@@ -88,16 +88,20 @@ class Shallow_reg:
         return scores
 
 
-
     def calculate_scores_cv(self, X, y, cv):
         print("Evaluating model with cross validation.")
+        #A testar
+        self.model = self.model.best_estimator_
         scores_cv_list = []
-        skf = KFold(n_splits=cv, shuffle=False)
+        skf = KFold(n_splits=cv, shuffle=True)
+        i=1
         for train, valid in skf.split(X, y):
+            print("Fold: " + str(i))
             X_train, X_valid = X[train], X[valid]
             y_train, y_valid = y[train], y[valid]
             self.model.fit(X_train, y_train)
             scores_cv_list.append(self.evaluate_model(X_valid, y_valid))
+            i+=1
         return scores_cv_list
 
     def format_scores_cv(self, scores_cv_list):
@@ -112,11 +116,12 @@ class Shallow_reg:
         for metric in raw_scores.keys():
             mean_scores[metric] = np.mean(raw_scores[metric])
             sd_scores[metric] = np.std(raw_scores[metric])
+        print("CV Results: ")
         for metric in mean_scores.keys():
             print(metric, ': ', str(mean_scores[metric]), ' +/- ', sd_scores[metric])
         return mean_scores, sd_scores, raw_scores
 
-    def save_best_model(self):
+    def save_best_model(self,type):
         print("Saving the best model for classificator: " + self.model_name)
         i = 0
         while os.path.exists("best_models/" + self.model_name + "_reg_" + str(i) + '.pkl'):
@@ -125,7 +130,10 @@ class Shallow_reg:
         if not os.path.exists(root):
             os.makedirs(root)
         file_name = os.path.join(root, self.model_name + "_reg_" + str(i) + '.pkl')
-        joblib.dump(self.model.best_estimator_, file_name, compress=1)
+        if type == "cv":
+            joblib.dump(self.model, file_name, compress=1)
+        elif type == "hold_out":
+            joblib.dump(self.model.best_estimator_, file_name, compress=1)
 
     def load_model(self,model_name):
         file_name = "best_models\\" + model_name + '.pkl'
@@ -197,8 +205,11 @@ class Shallow_reg:
         out.write('\n')
         out.write('Parameters:')
         out.write('\n')
-        for key in sorted(self.model.best_params_):
-            out.write(key + ": " + str(self.model.best_params_[key]))
+        # for key in sorted(self.model.best_params_):
+        #     out.write(key + ": " + str(self.model.best_params_[key]))
+        #     out.write('\n')
+        for key in sorted(self.model.get_params()):
+            out.write(key + ": " + str(self.model.get_params()[key]))
             out.write('\n')
         out.write("=" * 25)
         out.write('\n')
@@ -246,7 +257,7 @@ class Shallow_reg:
 
     def model_selection_rf(self, X, y, cv):
         rf = RandomForestRegressor()
-        n_estimators = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+        n_estimators = [10, 50, 100, 200, 500]
         param_grid = [{'n_estimators': n_estimators}]
         gs = GridSearchCV(estimator=rf, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
         gs.fit(X, y)
@@ -277,18 +288,14 @@ class Shallow_reg:
         self.model = gs
         self.model_name = 'KNN'
 
-    def model_selection_mlp(self, X, y, cv):
-        mlp = MLPRegressor()
-        hidden_layer_sizes = [(20,),(50,),(100,),(250,),(500,)]
-        activation = 'relu'
-        solver = ['lbfgs', 'sgd', 'adam']
-        learning_rate = ['constant','invscaling','adaptive']
-        param_grid = [{'hidden_layer_sizes': hidden_layer_sizes,
-                       'activation': activation, 'solver': solver, 'learning_rate': learning_rate}]
-        gs = GridSearchCV(estimator=mlp, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
+    def model_selection_en(self, X, y, cv):
+        en = ElasticNet()
+        param_grid = [{"fit_intercept":[True,False],"positive":[True,False],"selection":["cyclic","random"]}]
+        gs = GridSearchCV(estimator=en, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
         gs.fit(X, y)
         self.model = gs
-        self.model_name = 'MLP'
+        self.model_name = 'ElasticNet'
+
 
     def multi_model_selection(self, root_dir, experiment_designation, cv=5):
         for model in self.list_models:
@@ -307,7 +314,7 @@ class Shallow_reg:
             # scores = self.evaluate_model(self.X_test, self.y_test)
             self.write_report(scores, root_dir, file_name)
             self.write_cv_results(root_dir, file_name)
-            self.save_best_model()
+            self.save_best_model("hold_out")
 
     def multi_model_selection_cv(self,root_dir, experiment_designation,cv=5):
         for model in self.list_models:
@@ -316,10 +323,10 @@ class Shallow_reg:
             model_call(self.X.values, self.y.values, cv)
             file_name = model + '_' + experiment_designation
             self.print_parameter_values()
+            self.write_cv_results(root_dir, file_name)
             scores_cv_list = self.calculate_scores_cv(self.X.values, self.y.values, cv)
             mean, sd, raw = self.format_scores_cv(scores_cv_list)
             self.write_report_cv(mean, sd, raw, root_dir, file_name)
-            self.write_cv_results(root_dir, file_name)
-            self.save_best_model()
+            self.save_best_model("cv")
 
 

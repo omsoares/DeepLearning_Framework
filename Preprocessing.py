@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
-from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
 from sklearn.preprocessing import LabelEncoder
 
 
@@ -140,6 +140,20 @@ class Preprocessing:
         return self.n_samples
 
 
+    # def variance_filter(self,exprs, variance):
+    #     """
+    #     Filter the columns data by variance threshold.
+    #
+    #     """
+    #     print("Filtering by variance of ", variance)
+    #     before = len(exprs.columns)
+    #     variance_df = exprs.loc[:, (self.exprs.var() > int(variance))]
+    #     after = len(variance_df.columns)
+    #     print("Before: ", before)
+    #     print("After: ", after)
+    #     print("N feature filtered: ", before - after)
+    #     return variance_df
+
     def variance_filter(self,exprs, variance):
         """
         Filter the columns data by variance threshold.
@@ -147,12 +161,15 @@ class Preprocessing:
         """
         print("Filtering by variance of ", variance)
         before = len(exprs.columns)
-        variance_df = exprs.loc[:, (self.exprs.var() > int(variance))]
+        selector = VarianceThreshold(variance)
+        selector.fit_transform(exprs)
+        variance_df = exprs[exprs.columns[selector.get_support(indices=True)]]
         after = len(variance_df.columns)
         print("Before: ", before)
         print("After: ", after)
         print("N feature filtered: ", before - after)
         return variance_df
+
 
     def mse_filter(self, exprs, num_mad_genes):
         """
@@ -216,6 +233,14 @@ class Preprocessing:
         np.savetxt(y_train_name, y_train,fmt='%s')
         np.savetxt(y_test_name, y_test,fmt='%s')
 
+    def save_matrices(self,X,y,root,file_name):
+        if not os.path.exists(root):
+            os.makedirs(root)
+        X_name = os.path.join(root, 'X' + file_name + '.csv')
+        y_name = os.path.join(root, 'y' + file_name + '.csv')
+        np.savetxt(X_name, X,fmt='%s')
+        np.savetxt(y_name, y,fmt='%s')
+
 
     def split_dataset(self, split=1,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = True):
         """
@@ -247,12 +272,15 @@ class Preprocessing:
             X = self.filter_genes(X,y,features)
         if split == 0:
             print("Total: ", y.count())
+            root = 'Matrices'
+            file_name = "_matrix"
+            self.save_matrices(X,y,root,file_name)
             return X, y
         elif split == 1:
             if stratify == True:
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y,shuffle=True)
             elif stratify == False:
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, shuffle=True)
             # Save *.csv files with stratified train/test subsets
             root = 'Train_test_matrices'
             file_name = "_matrix"

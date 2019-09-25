@@ -133,7 +133,7 @@ class DNN_bin:
             cvhistory = []
             time_fit = []
             i = 0
-            skf = StratifiedKFold(n_splits=cv, shuffle=False)
+            skf = StratifiedKFold(n_splits=cv, shuffle=True)
             for train, valid in skf.split(X, y):
                 print("Running Fold " + str(i + 1) + str("/") + str(cv))
                 X_train, X_valid = X[train], X[valid]
@@ -256,6 +256,9 @@ class DNN_bin:
                 temp_values['val_loss_' + str(i + 1)] = val_loss
                 temp_values['time_fit_' + str(i + 1)] = time_fit
                 i += 1
+                K.clear_session()
+                del self.history
+                del self.model
             temp_values['mean_train_matthews_correlation'] = np.mean(mean_train_matthews_correlation)
             temp_values['mean_train_loss'] = np.mean(mean_train_loss)
             temp_values['mean_val_matthews_correlation'] = np.mean(mean_val_matthews_correlation)

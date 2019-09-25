@@ -107,7 +107,7 @@ class DNN_reg:
             model.add(BatchNormalization())
             model.add(Dropout(self.parameters['dropout']))
         # constructing the final layer
-        model.add(Dense(1))
+        model.add(Dense(1,activation="linear"))
         if self.parameters['optimization'] == 'SGD':
             optim = SGD(lr = self.parameters['learning_rate'] )
             # optim.lr.set_value(self.parameters['learning_rate'])
@@ -131,7 +131,7 @@ class DNN_reg:
             cvhistory = []
             time_fit = []
             i = 0
-            skf = KFold(n_splits=cv, shuffle=False)
+            skf = KFold(n_splits=cv, shuffle=True)
             for train, valid in skf.split(X, y):
                 print("Running Fold " + str(i + 1) + str("/") + str(cv))
                 X_train, X_valid = X[train], X[valid]
@@ -252,6 +252,9 @@ class DNN_reg:
                 temp_values['val_loss_' + str(i + 1)] = val_loss
                 temp_values['time_fit_' + str(i + 1)] = time_fit
                 i += 1
+                K.clear_session()
+                del self.history
+                del self.model
             temp_values['mean_train_r2'] = np.mean(mean_train_r2)
             temp_values['mean_train_loss'] = np.mean(mean_train_loss)
             temp_values['mean_val_r2'] = np.mean(mean_val_r2)

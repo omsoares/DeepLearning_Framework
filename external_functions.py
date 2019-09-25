@@ -1,10 +1,21 @@
 import numpy as np
 import keras.backend as K
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import confusion_matrix
+
+
+
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth=True
+# sess = tf.Session(config=config)
+# set_session(sess)
+
+
 
 
 def validate_matrices(kwargs):
