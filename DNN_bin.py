@@ -17,9 +17,11 @@ from keras.models import model_from_json
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD, RMSprop, Adadelta, Adam
 from keras.callbacks import EarlyStopping
+from keras.utils import multi_gpu_model
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, matthews_corrcoef, precision_score, recall_score, \
     log_loss
+import tensorflow as tf
 import os
 
 class DNN_bin:
@@ -43,7 +45,8 @@ class DNN_bin:
             'nb_epoch': 100,
             'batch_size': 75,
             'early_stopping': True,
-            'patience': 30
+            'patience': 30,
+            'batch_normalization': True
         }
         self.filename = None
         self.verbose = 0
@@ -92,7 +95,7 @@ class DNN_bin:
         print("Creating DNN model")
         fundamental_parameters = ['dropout', 'optimization', 'learning_rate',
                                   'units_in_input_layer',
-                                  'units_in_hidden_layers', 'nb_epoch', 'batch_size']
+                                  'units_in_hidden_layers', 'nb_epoch', 'batch_size','batch_normalization']
         for param in fundamental_parameters:
             if self.parameters[param] == None:
                 print("Parameter not set: " + param)
@@ -101,12 +104,14 @@ class DNN_bin:
         model = Sequential()
         # Input layer
         model.add(Dense(self.parameters['units_in_input_layer'], input_dim=self.feature_number, activation='relu'))
-        model.add(BatchNormalization())
+        if self.parameters['batch_normalization'] == True:
+            model.add(BatchNormalization())
         model.add(Dropout(self.parameters['dropout']))
         # constructing all hidden layers
         for layer in self.parameters['units_in_hidden_layers']:
             model.add(Dense(layer, activation='relu'))
-            model.add(BatchNormalization())
+            if self.parameters['batch_normalization'] == True:
+                model.add(BatchNormalization())
             model.add(Dropout(self.parameters['dropout']))
         # constructing the final layer
         model.add(Dense(1, activation="sigmoid"))
@@ -120,6 +125,7 @@ class DNN_bin:
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
+        model = multi_gpu_model(model,gpus=2)
         model.compile(loss='binary_crossentropy', optimizer=optim, metrics=[matthews_correlation])
         if self.verbose == 1: str(model.summary())
         self.model = model

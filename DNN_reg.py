@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
+from keras.utils import multi_gpu_model
 from keras.models import model_from_json
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD, RMSprop, Adadelta, Adam
@@ -42,7 +43,8 @@ class DNN_reg:
             'nb_epoch': 100,
             'batch_size': 75,
             'early_stopping': True,
-            'patience': 30
+            'patience': 30,
+            'batch_normalization': True
         }
         self.filename = None
         self.verbose = 0
@@ -90,7 +92,7 @@ class DNN_reg:
         print("Creating DNN model")
         fundamental_parameters = ['dropout', 'optimization', 'learning_rate',
                                   'units_in_input_layer',
-                                  'units_in_hidden_layers', 'nb_epoch', 'batch_size']
+                                  'units_in_hidden_layers', 'nb_epoch', 'batch_size','batch_normalization']
         for param in fundamental_parameters:
             if self.parameters[param] == None:
                 print("Parameter not set: " + param)
@@ -99,12 +101,14 @@ class DNN_reg:
         model = Sequential()
         # Input layer
         model.add(Dense(self.parameters['units_in_input_layer'], input_dim=self.feature_number, activation='relu'))
-        model.add(BatchNormalization())
+        if self.parameters['batch_normalization'] == True:
+            model.add(BatchNormalization())
         model.add(Dropout(self.parameters['dropout']))
         # constructing all hidden layers
         for layer in self.parameters['units_in_hidden_layers']:
             model.add(Dense(layer, activation='relu'))
-            model.add(BatchNormalization())
+            if self.parameters['batch_normalization'] == True:
+                model.add(BatchNormalization())
             model.add(Dropout(self.parameters['dropout']))
         # constructing the final layer
         model.add(Dense(1,activation="linear"))
@@ -118,6 +122,7 @@ class DNN_reg:
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
+        model = multi_gpu_model(model, gpus=2)
         model.compile(loss='mean_squared_error', optimizer=optim, metrics=[r2_keras])
         if self.verbose == 1: str(model.summary())
         self.model = model

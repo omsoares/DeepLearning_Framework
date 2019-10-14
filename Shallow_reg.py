@@ -46,7 +46,6 @@ class Shallow_reg:
         self.model = None
         self.model_name = None
         self.scoring = r2_metric
-        #if validate_matrices(kwargs):
         if len(kwargs.keys())<=3:
             self.X = kwargs['X']
             self.y = kwargs['y']
@@ -205,9 +204,6 @@ class Shallow_reg:
         out.write('\n')
         out.write('Parameters:')
         out.write('\n')
-        # for key in sorted(self.model.best_params_):
-        #     out.write(key + ": " + str(self.model.best_params_[key]))
-        #     out.write('\n')
         for key in sorted(self.model.get_params()):
             out.write(key + ": " + str(self.model.get_params()[key]))
             out.write('\n')
@@ -242,8 +238,6 @@ class Shallow_reg:
 
     def model_selection_svm(self, X, y, cv):
         svm = SVR()
-        # param_range = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500,
-        #                750, 1000]
         param_range = [0.001,0.01,0.1,1,10,100,1000]
         param_grid = [{'C': param_range,
                        'kernel': ['linear']},
@@ -264,16 +258,6 @@ class Shallow_reg:
         print(gs.best_params_)
         self.model = gs
         self.model_name = 'RF'
-
-    # def model_selection_ada(self, X, y, cv):
-    #     ada = AdaBoostRegressor()
-    #     n_estimators = [10, 50, 100, 200]
-    #     learning_rate = [1, 0.1, 0.01, 0.001, 0.0001]
-    #     param_grid = [{'learning_rate': learning_rate, 'n_estimators':n_estimators}]
-    #     gs = GridSearchCV(estimator=ada, param_grid=param_grid, scoring=self.scoring, n_jobs=-1, cv=cv, verbose=1)
-    #     gs.fit(X, y)
-    #     self.model = gs
-    #     self.model_name = 'ADABOOST'
 
     def model_selection_knn(self, X, y, cv):
         knn = KNeighborsRegressor()
@@ -301,17 +285,10 @@ class Shallow_reg:
         for model in self.list_models:
             print(model)
             model_call = getattr(self, "model_selection_" + model)
-            # print(model_call)
             model_call(self.X_train.values, self.y_train.values, cv)
-            # model_call(self.X_train, self.y_train, cv)
             file_name = model + '_' + experiment_designation
             self.print_parameter_values()
-            # print(self.X_test)
-            # print(self.y_test)
-            # print(self.model_name)
-            # print(self.model)
             scores = self.evaluate_model(self.X_test.values, self.y_test.values)
-            # scores = self.evaluate_model(self.X_test, self.y_test)
             self.write_report(scores, root_dir, file_name)
             self.write_cv_results(root_dir, file_name)
             self.save_best_model("hold_out")

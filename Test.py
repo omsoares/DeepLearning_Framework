@@ -255,35 +255,39 @@ Test with Neuroblastoma dataset
 
 # dnn_mt.fit_model(X_train,X_val,y_train_splt,y_val_splt)
 
-def main():
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    micro = Preprocessing("data_mRNA_median_Zscores.txt", "clinical_data", mt=False)
-    micro.load_data(2, "Hugo_Symbol","NPI", "PATIENT_ID")
-    # micro.nom_to_num()
-    # X, y = micro.split_dataset(split=0, normalize_method=None, filt_method="mse", features=5000, variance=0.01,
-    #                              test_size=0.3, stratify=False)
-    X_train,X_test,y_train,y_test= micro.split_dataset(split=1, normalize_method=None, filt_method='mse', features=5000, variance=0.01,
-                                 test_size=0.25, stratify=False)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+micro = Preprocessing("data_mRNA_median_Zscores.txt", "clinical_data", mt=True)
+micro.load_data(2, "Hugo_Symbol",["ER_STATUS","HER2_STATUS","PR_STATUS"], "PATIENT_ID")
+micro.nom_to_num()
+# X, y = micro.split_dataset(split=0, normalize_method=None, filt_method="mse", features=5000, variance=0.01,
+#                              test_size=0.3, stratify=False)
+# X_train,X_test,y_train,y_test= micro.split_dataset(split=1, normalize_method=None, filt_method='mse', features=5000, variance=0.01,
+#                              test_size=0.25, stratify=False)
+X_train, X_test, y_train, y_test = micro.split_dataset(split=1, normalize_method=None, filt_method='mse',
+                                                           features=5000, variance=0.01,
+                                                           test_size=0.25, stratify=False)
 
 
-    parameters_batch = {
-        'dropout': [0.2, 0.3, 0.4, 0.5],
-        'optimization': ['Adadelta', 'Adam', 'RMSprop', 'SGD'],
-        'learning_rate': [0.015, 0.010, 0.005, 0.001, 0.0001],
-        'batch_size': [16, 32, 64, 128, 256],
-        'nb_epoch': [100, 150, 200],
-        'units_in_hidden_layers': [[2048, 1024, 512], [1024, 128], [2048, 1024, 512, 128], [2048, 128, 16],
-                                   [2048, 128], [2048, 512]],
-        'units_in_input_layer': [5000],
-        'early_stopping': [True, False],
-        'patience': [80]
-    }
-    # labels = ["ER_STATUS","THREEGENE"]
-    # types = ["bin","multi"]
-    # dnn = DNN_reg(X=X, y=y, parameters_batch=parameters_batch, cv=5, labels = labels, types = types)
-    # dnn.multi_model_selection_cv("DNN_MT", "V2", n_iter=1, cv=5)
-    shallow = Shallow_reg(X_train = X_train, X_test = X_test, y_train = y_train,y_test = y_test,cv=5)
-    shallow.multi_model_selection("NPI_V2","Shallow",cv=3)
 
-if __name__=="__main__":
-    main()
+parameters_batch = {
+    'dropout': [0.2, 0.3, 0.4, 0.5],
+    'optimization': ['Adadelta', 'Adam', 'RMSprop', 'SGD'],
+    'learning_rate': [0.015, 0.010, 0.005, 0.001, 0.0001],
+    'batch_size': [16, 32, 64, 128, 256],
+    'nb_epoch': [100, 150, 200],
+    'units_in_hidden_layers': [[2048, 1024, 512], [1024, 128], [2048, 1024, 512, 128], [2048, 128, 16],
+                               [2048, 128], [2048, 512]],
+    'units_in_input_layer': [5000],
+    # 'units_in_input_layer': [17530],
+    'early_stopping': [True, False],
+    'patience': [80],
+    'batch_normalization': [True, False]
+}
+labels = ["ER_STATUS","HER2_STATUS","PR_STATUS"]
+types = ["bin","bin","bin"]
+# dnn = DNN_reg(X_train = X_train, X_test = X_test, y_train = y_train, y_test = y_test, parameters_batch=parameters_batch, cv=5)
+# dnn.multi_model_selection("NPI_V2","DNN",n_iter=50,cv=5)
+dnn = DNN_MT(X_train = X_train, X_test = X_test, y_train = y_train, y_test=y_test, parameters_batch=parameters_batch, cv=5, labels = labels, types = types)
+dnn.multi_model_selection("DNN_MT_V2", "try_0", n_iter=50, cv=5)
+# shallow = Shallow_reg(X_train = X_train, X_test = X_test, y_train = y_train,y_test = y_test,cv=5)
+# shallow.multi_model_selection("NPI_V2","Shallow",cv=5)

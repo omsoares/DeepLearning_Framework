@@ -11,6 +11,7 @@ from keras.layers import Dense, Dropout, BatchNormalization, Input
 from keras.models import model_from_json
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD, RMSprop, Adadelta, Adam
+from keras.utils import multi_gpu_model
 from keras.callbacks import EarlyStopping
 from sklearn.model_selection import StratifiedKFold, train_test_split, KFold
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, matthews_corrcoef, r2_score, precision_score, recall_score, \
@@ -41,7 +42,8 @@ class DNN_MT:
             'nb_epoch': 100,
             'batch_size': 75,
             'early_stopping': True,
-            'patience': 30
+            'patience': 30,
+            'batch_normalization': True
         }
         self.filename = None
         self.verbose = 0
@@ -126,7 +128,7 @@ class DNN_MT:
         print("Creating DNN model")
         fundamental_parameters = ['dropout', 'optimization', 'learning_rate',
                                   'units_in_input_layer',
-                                  'units_in_hidden_layers', 'nb_epoch', 'batch_size']
+                                  'units_in_hidden_layers', 'nb_epoch', 'batch_size','batch_normalization']
         for param in fundamental_parameters:
             if self.parameters[param] == None:
                 print("Parameter not set: " + param)
@@ -141,7 +143,8 @@ class DNN_MT:
                 x = Dense(units,activation="relu")(input)
             else:
                 x = Dense(units,activation="relu")(x)
-            x = BatchNormalization()(x)
+            if self.parameters['batch_normalization'] == True:
+                x = BatchNormalization()(x)
             x = Dropout(self.parameters['dropout'])(x)
         output_dict = {}
         output_list = []
@@ -201,8 +204,10 @@ class DNN_MT:
 
         model = Model(outputs = list(output_dict.values()),input=[input])
         if self.loss_weights != None:
+            model = multi_gpu_model(model, gpus=2)
             model.compile(optimizer=optim, loss=list(loss_dict.values()), metrics=list(metrics_dict.values()),loss_weights=self.loss_weights)
         else:
+            model = multi_gpu_model(model, gpus=2)
             model.compile(optimizer=optim, loss = list(loss_dict.values()),metrics = list(metrics_dict.values()))
         if self.verbose == 1: str(model.summary())
         self.model = model
@@ -275,12 +280,15 @@ class DNN_MT:
         out.write("\n")
         print("Hold out results:")
         for end in self.labels:
+            out.write(str(end))
+            out.write("\n")
+            out.write("\n")
             for metric in scores.keys():
-                if "valid" in metric:
-                    if end in metric:
-                        print(str(end) + ": " + str(scores[metric]))
-                        out.write(str(end) + ": " + str(scores[metric]))
-                        out.write('\n')
+                if end in metric:
+                    # print(str(end) + ": " + str(scores[metric]))
+                    out.write(str(metric) + ": " + str(scores[metric]))
+                    out.write('\n')
+            out.write("\n")
         out.close()
         print("Report file successfully written.")
 
