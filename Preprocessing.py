@@ -10,6 +10,12 @@ from sklearn.preprocessing import LabelEncoder
 class Preprocessing:
 
     def __init__(self, expr_file, clinic_data_file,mt = False):
+        """
+        Creation of the object for preprocessing data before being used to create machine learning models
+        :param expr_file: file name of the file with expression data
+        :param clinic_data_file: file name of the file with clinical data or metadata
+        :param mt: boolean True if the data is to be used in multi-tasking models
+        """
         self.expr_file = expr_file
         self.clinic_data_file = clinic_data_file
         self.exprs = None
@@ -31,13 +37,14 @@ class Preprocessing:
         """
         print("Reading High Throughput gene expression file...")
         exprs = pd.read_table(self.expr_file, header=0, sep=sep)
-        exprs_1 = exprs.iloc[:,column_index:]
+        exprs_1_pre = exprs.set_index(exprs[gene_id])
+        exprs_1 = exprs_1_pre.iloc[:,column_index:]
         if transpose:
             exprs_2 = exprs_1.transpose()
         elif transpose == False:
             exprs_2 = exprs_1
-        if gene_id != None:
-            exprs_2.columns = exprs[gene_id]
+        # if gene_id != None:
+        #     exprs_2.columns = exprs[gene_id]
         self.exprs = exprs_2
         self.exprs = self.exprs.replace([np.inf, -np.inf], np.nan).dropna(axis=1)
         print("Expression data successfully load.")
@@ -94,6 +101,12 @@ class Preprocessing:
         self.clinic_data = self.clinic_data.dropna()
 
     def nom_to_num(self,column = None):
+        """
+        Method for encoding string variables of the clinical data into integers
+
+        :param column: string with the name of the column to categorize
+        :return: None
+        """
         df = self.clinic_data.copy()
         lb_make = LabelEncoder()
         if self.mt == False:
@@ -112,12 +125,19 @@ class Preprocessing:
 
     def load_data(self,column_index,gene_id, cd_column,pat_id_column, exp_sep="\t", cli_sep="\t",transpose = True, equal = True):
         """
-        Runs previous functions to read all the data.
+        Loads both clinical and expression datasets
 
-        If equal = True, then clinical data and expression data are reindex equally
+        Reindex, clean missing data and applies different operations to the datasets
 
-        equal = False must be used when patient IDs are different between the clinical and expression data
-
+        :param column_index: corresponds to the index of the start of the columns corresponding to omics data
+        :param gene_id: string with the name of the column that contains the IDs for the samples
+        :param cd_column: string of the column name corresponding to y values (values to be predicted)
+        :param pat_id_column: the string corresponding to the column with patient IDs
+        :param exp_sep: separator for the columns in the expression dataset
+        :param cli_sep: separator for the columns in the clinical dataset
+        :param transpose: boolean True if expression dataset is to be transposed
+        :param equal: boolean True if the indexation of columns between the two datasets is the same
+        :return: None
         """
         self.read_exprs_data(column_index,gene_id,exp_sep,transpose)
         self.read_clinical_data(cd_column,pat_id_column,cli_sep)
@@ -131,33 +151,29 @@ class Preprocessing:
         self.set_sample_number()
 
     def get_feature_number(self):
+        """
+        :return: number of features in the expression dataset
+        """
         return self.n_features
 
     def get_list_features(self):
+        """
+        :return: list of features in the expression dataset
+        """
         return self.features
 
     def get_sample_number(self):
+        """
+        :return: number of samples
+        """
         return self.n_samples
-
-
-    # def variance_filter(self,exprs, variance):
-    #     """
-    #     Filter the columns data by variance threshold.
-    #
-    #     """
-    #     print("Filtering by variance of ", variance)
-    #     before = len(exprs.columns)
-    #     variance_df = exprs.loc[:, (self.exprs.var() > int(variance))]
-    #     after = len(variance_df.columns)
-    #     print("Before: ", before)
-    #     print("After: ", after)
-    #     print("N feature filtered: ", before - after)
-    #     return variance_df
 
     def variance_filter(self,exprs, variance):
         """
-        Filter the columns data by variance threshold.
-
+        Filter the columns in the expression dataset by applying a variance filter
+        :param exprs: gene expression dataset to be applied the filter
+        :param variance: variance threshold value
+        :return: filtered expression dataset
         """
         print("Filtering by variance of ", variance)
         before = len(exprs.columns)
@@ -173,8 +189,11 @@ class Preprocessing:
 
     def mse_filter(self, exprs, num_mad_genes):
         """
-        Determine most variably expressed genes and subset
+        Filter the k columns with highest mean absolute deviation in the expression dataset
 
+        :param exprs: gene expression dataset to be applied the filter
+        :param num_mad_genes:  number of columns needed in the final expression dataset
+        :return: filtered expression dataset
         """
         print('Determining most variably expressed genes and subsetting')
         mad_genes = exprs.mad(axis=0).sort_values(ascending=False)
@@ -186,6 +205,10 @@ class Preprocessing:
         """
         Filter top number_genes using sklearn SelectKBest with filter f_classif
 
+        :param exprs: gene expression dataset to be applied the filter
+        :param y: dataset with labels to be predicted
+        :param number_genes: number of columns needed in the final dataset
+        :return: filtered expression dataset
         """
         print('Filtering top ' + str(number_genes) + ' genes.')
         filter = SelectKBest(score_func=f_classif, k=number_genes)
@@ -197,8 +220,10 @@ class Preprocessing:
 
     def normalize_zero_one(self, exprs):
         """
-        Scale expression data using zero-one normalization
+        Scale expression data using zero-one normalization from Scikit-learn
 
+        :param exprs: gene expression dataset to be normalized
+        :return: normalized gene expression dataset
         """
         print('Zero one data normalization.')
         msc = MinMaxScaler()
@@ -211,8 +236,9 @@ class Preprocessing:
 
     def normalize_data(self, exprs):
         """
-        Scale expression data using StandardScaler normalization
-
+        Scale expression data using StandardScaler normalization from Scikit-learn
+        :param exprs: gene expression dataset to be normalized
+        :return: normalized gene expression dataset
         """
         print("Data normalization")
         rnaseq_scaled_df = StandardScaler().fit_transform(exprs)
@@ -222,6 +248,17 @@ class Preprocessing:
         return rnaseq_scaled_df
 
     def save_matrices_train_test(self, X_train, X_test, y_train, y_test, root, file_name):
+        """
+        Stores the train and test matrices in the intended directory in a csv format
+
+        :param X_train: Train gene expression data
+        :param X_test: Test gene expression data
+        :param y_train: Train clinical data (labels)
+        :param y_test: Test clinical data (labels)
+        :param root: Directory where the matrices will be stored
+        :param file_name: Base name for the files of the matrices
+        :return: None
+        """
         if not os.path.exists(root):
             os.makedirs(root)
         X_train_name = os.path.join(root, 'X_train' + file_name + '.csv')
@@ -234,6 +271,14 @@ class Preprocessing:
         np.savetxt(y_test_name, y_test,fmt='%s')
 
     def save_matrices(self,X,y,root,file_name):
+        """
+        Stores the generated matrices an intended directory in a csv format
+        :param X: Gene expression data
+        :param y: Clinical data (labels)
+        :param root: Directory where the matrices will be stored
+        :param file_name: Base name for the files of the matrices
+        :return: None
+        """
         if not os.path.exists(root):
             os.makedirs(root)
         X_name = os.path.join(root, 'X' + file_name + '.csv')
@@ -244,6 +289,7 @@ class Preprocessing:
 
     def split_dataset(self, split=1,normalize_method = "standard",filt_method = "mse",features=5000, variance =0.01,test_size=0.3, stratify = True):
         """
+        Splits the dataset in train and set
 
         :param  split = 0 - returns X,y not splited for k-fold cross-validation pipeline
                 split = 1 - returns X_train, X_test, y_train, y_test and saves matrices
