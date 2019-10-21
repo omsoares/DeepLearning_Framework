@@ -1,4 +1,3 @@
-from Preprocessing import *
 from external_functions import *
 from numpy import *
 import matplotlib
@@ -10,13 +9,10 @@ from sklearn.externals import joblib
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import matthews_corrcoef, make_scorer
 mcc = make_scorer(matthews_corrcoef, greater_is_better=True)
-from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, matthews_corrcoef, precision_score, recall_score, \
-    log_loss
-import time
+from sklearn.metrics import  accuracy_score, f1_score, matthews_corrcoef, precision_score, recall_score
 import os
 
 accuracy = make_scorer(accuracy_score, greater_is_better=True)
@@ -25,12 +21,11 @@ accuracy = make_scorer(accuracy_score, greater_is_better=True)
 
 class Shallow_multi:
     """
-    This class is intended for performing model selection and testing of shallow models.
+    This is class is to be used for generating traditional machine learning models for multi-class classification problems.
 
-    For k-fold cross-validation with X and y matrices declare:
+    The number of folds to be applied in cross-validation should be inputed in the "cv" argument
 
-    For train/test split and cross-validation declare:
-
+    The X and y data can be provided or X_train,X_test,y_train,y_test instead.
 
     """
     def __init__(self, **kwargs):
@@ -46,7 +41,6 @@ class Shallow_multi:
         self.model = None
         self.model_name = None
         self.scoring = accuracy
-        #if validate_matrices(kwargs):
         if len(kwargs.keys())<=3:
             self.X = kwargs['X']
             self.y = kwargs['y']
@@ -69,15 +63,32 @@ class Shallow_multi:
 
 
     def print_parameter_values(self):
+        """
+        Print the selected parameters after the GridSearchCV
+
+        :return: None
+        """
         print("Hyperparameters")
         for key in sorted(self.model.best_params_):
             print(key + ": " + str(self.model.best_params_[key]))
 
     def predict_values(self,X):
+        """
+        Return the predictions of the model for a given X input
+        :param X: data used to generate the prediction
+        :return: Return the predicted labels
+        """
         y_pred = self.model.predict(X)
         return y_pred
 
     def evaluate_model(self, X_test, y_test):
+        """
+        Evaluates the model performance by calculating different metrics using a test dataset
+
+        :param X_test: Data to be used by the model to predict the labels
+        :param y_test: Real labels
+        :return: dictionary with the different metric scores.
+        """
         y_pred = self.model.predict(X_test)
         scores = dict()
         scores['accuracy'] = accuracy_score(y_test, y_pred)
@@ -91,6 +102,14 @@ class Shallow_multi:
 
 
     def calculate_scores_cv(self, X, y, cv):
+        """
+        Evaluates the model performance by calculating different metrics using cross validation
+
+        :param X: Gene expression to be used to train and evaluate the model
+        :param y: Clinical data to be used as label in model train and testing
+        :param cv: number of cross-validation folds to be generated
+        :return: Returns a dictionary with the different metrics for each fold
+        """
         print("Evaluating model with cross validation.")
         self.model = self.model.best_estimator_
         scores_cv_list = []
@@ -106,6 +125,12 @@ class Shallow_multi:
         return scores_cv_list
 
     def format_scores_cv(self, scores_cv_list):
+        """
+        Formats the raw scores to calculate the mean and standard deviation
+
+        :param scores_cv_list: dictionary with the metric values for each of the folds
+        :return: Three dictionaries with mean scores, standard deviation scores and raw scores for each metric
+        """
         raw_scores = dict.fromkeys(list(scores_cv_list[0].keys()))
         for key, value in raw_scores.items():
             raw_scores[key] = []
@@ -122,6 +147,12 @@ class Shallow_multi:
         return mean_scores, sd_scores, raw_scores
 
     def save_best_model(self,type):
+        """
+        Stores the model in a pkl format
+
+        :param type: cv if cross-validation was applied, hold-out if it was evaluated with test dataset
+        :return: None
+        """
         print("Saving the best model for classificator: " + self.model_name)
         i = 0
         while os.path.exists("best_models/" + self.model_name + "_multi_" + str(i) + '.pkl'):
@@ -136,6 +167,12 @@ class Shallow_multi:
             joblib.dump(self.model.best_estimator_, file_name, compress=1)
 
     def load_model(self,model_name):
+        """
+        Loads a stored model
+
+        :param model_name: file name of the model to be loaded
+        :return: None
+        """
         file_name = "best_models\\" + model_name + '.pkl'
         print("Loading model from: " + file_name)
         self.model_name = model_name
@@ -143,6 +180,13 @@ class Shallow_multi:
         print("Model loaded successfully!")
 
     def write_cv_results(self, root_dir, file_name):
+        """
+        Stores the results of the cross-validation in a csv file
+
+        :param root_dir: directory where the file will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         # Create a file with parameters and results
         print("Saving file with results...")
         res = pd.DataFrame(self.model.cv_results_)
@@ -160,6 +204,14 @@ class Shallow_multi:
 
 
     def write_report(self, scores, root_dir, file_name):
+        """
+        Stores results of the evaluation using the test dataset
+
+        :param scores: dictionary with the scores of the evaluation
+        :param root_dir: directory where the file will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -189,6 +241,16 @@ class Shallow_multi:
         print("Report file successfully written.")
 
     def write_report_cv(self, mean_scores, sd_scores, raw_scores, root_dir, file_name):
+        """
+        Write the results of the cross validation evaluation
+
+        :param mean_scores: dictionary with the mean scores
+        :param sd_scores: dictionary with the standard deviations
+        :param raw_scores: dictionary with raw scores
+        :param root_dir: directory where the file will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -204,9 +266,6 @@ class Shallow_multi:
         out.write('\n')
         out.write('Parameters:')
         out.write('\n')
-        # for key in sorted(self.model.best_params_):
-        #     out.write(key + ": " + str(self.model.best_params_[key]))
-        #     out.write('\n')
         for key in sorted(self.model.get_params()):
             out.write(key + ": " + str(self.model.get_params()[key]))
             out.write('\n')
@@ -224,25 +283,16 @@ class Shallow_multi:
         df.to_csv(cv_df_path, sep='\t')
         print("Report file successfully written.")
 
-    def PCA(self):
-        pca = PCA(n_components=2)
-        X_train_pca = pca.fit_transform(self.X_train)
-        X_test_pca = pca.transform(self.X_valid)
-        colors = ['r', 'b']
-        markers = ['s', 'x']
-        for l, c in zip(np.unique(self.y_train), colors, markers):
-            plt.scatter(self.X_train[self.y_train == l, 0],
-                        self.X_train[self.y_train == l, 1],
-                        c=c, label=l, marker=m)
-            plt.xlabel('PC 1')
-            plt.ylabel('PC 2')
-            plt.legend(loc='lower left')
-            plt.show()
-
     def model_selection_svm(self, X, y, cv):
+        """
+        SVM model training using GridSearchCV
+
+        :param X: Input dataset to be used for model training
+        :param y: Output dataset to be used for model training
+        :param cv: number of folds to be used in the GridSearchCV
+        :return: None
+        """
         svm = SVC()
-        # param_range = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500,
-        #                750, 1000]
         param_range = [0.001,0.01,0.1,1,10,100,1000]
         param_grid = [{'C': param_range,
                        'kernel': ['linear']},
@@ -255,6 +305,14 @@ class Shallow_multi:
         self.model_name = 'SVM'
 
     def model_selection_rf(self, X, y, cv):
+        """
+        Random forest model training using GridSearchCV
+
+        :param X: Input dataset to be used for model training
+        :param y: Output dataset to be used for model training
+        :param cv: number of folds to be used in the GridSearchCV
+        :return: None
+        """
         rf = RandomForestClassifier()
         n_estimators = [10, 50, 100, 200, 500]
         param_grid = [{'n_estimators': n_estimators}]
@@ -264,6 +322,14 @@ class Shallow_multi:
         self.model_name = 'RF'
 
     def model_selection_knn(self, X, y, cv):
+        """
+        K-nearest neighbor model training using GridSearchCV
+
+        :param X: Input dataset to be used for model training
+        :param y: Output dataset to be used for model training
+        :param cv: number of folds to be used in the GridSearchCV
+        :return: None
+        """
         knn = KNeighborsClassifier()
         # creating odd list of K for KNN
         myList = list(range(1, 7))
@@ -276,24 +342,17 @@ class Shallow_multi:
         self.model = gs
         self.model_name = 'KNN'
 
-    # def model_selection_lda(self, X, y, cv):
-    #     LDA = LinearDiscriminantAnalysis()
-    #     myList = list(range(1, 20))
-    #     # subsetting just the odd ones
-    #     n_components = list(filter(lambda x: x % 2 != 0, myList))
-    #     param_grid = [{'n_components': n_components}]
-    #     gs = GridSearchCV(estimator=LDA, param_grid=param_grid, scoring=self.scoring, n_jobs=10, cv=cv)
-    #     gs.fit(X, y)
-    #     self.model = gs
-    #     self.model_name = 'LDA'
-
     def model_selection_lr(self, X, y, cv):
+        """
+        Logistic Regression model training using GridSearchCV
+
+        :param X: Input dataset to be used for model training
+        :param y: Output dataset to be used for model training
+        :param cv: number of folds to be used in the GridSearchCV
+        :return: None
+        """
         LR = LogisticRegression()
-        myList = list(range(1, 5))
-        param_grid = {
-            # 'C': [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 1.5, 2, 5, 10, 20, 50, 100, 150, 200, 500, 750,
-                  # 1000],
-            "C": [0.001,0.01,0.1,1,10,100,1000],
+        param_grid = {"C": [0.001,0.01,0.1,1,10,100,1000],
             'penalty': ['l1', 'l2']}
         gs = GridSearchCV(estimator=LR, param_grid=param_grid, scoring=self.scoring, n_jobs=10, cv=cv)
         gs.fit(X, y)
@@ -301,25 +360,38 @@ class Shallow_multi:
         self.model_name = 'LR'
 
     def multi_model_selection(self, root_dir, experiment_designation, cv=5):
+        """
+        Trains and selects the best model for each type of available model.
+
+        The evaluation is performed using a test set
+
+        :param root_dir: Directory where the models and reports will be stored
+        :param experiment_designation: base name to be used in the generated models and results
+        :param cv: number of folds to be used in the cross-validation process
+        :return: None
+        """
         for model in self.list_models:
             print(model)
             model_call = getattr(self, "model_selection_" + model)
-            # print(model_call)
             model_call(self.X_train.astype(np.float), self.y_train.astype(int), cv)
-            # model_call(self.X_train, self.y_train, cv)
             file_name = model + '_' + experiment_designation
             self.print_parameter_values()
-            # print(self.X_test)
-            # print(self.y_test)
-            # print(self.model_name)
-            # print(self.model)
             scores = self.evaluate_model(self.X_test.astype(np.float), self.y_test.astype(int))
-            # scores = self.evaluate_model(self.X_test, self.y_test)
             self.write_report(scores, root_dir, file_name)
             self.write_cv_results(root_dir, file_name)
             self.save_best_model("hold_out")
 
     def multi_model_selection_cv(self, root_dir, experiment_designation, cv=5):
+        """
+        Trains and selects the best model for each type of available model.
+
+        The evaluation is performed using cross-validation
+
+        :param root_dir: Directory where the models and reports will be stored
+        :param experiment_designation: base name to be used in the generated models and results
+        :param cv: number of folds to be used in the cross-validation process
+        :return: None
+        """
         for model in self.list_models:
             print(model)
             model_call = getattr(self, "model_selection_" + model)
