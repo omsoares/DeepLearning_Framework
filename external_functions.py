@@ -20,6 +20,7 @@ from sklearn.metrics import confusion_matrix
 
 def validate_matrices(kwargs):
     """
+    Method in construction for evaluating if the input matrices are valid
 
     :param kwargs: kwargs from machine learning modules containing data matrices (X/y) or (X_train/X_test/y_train/y_test)
     :return: True if type is correct and does not contain NAs
@@ -43,11 +44,21 @@ def validate_matrices(kwargs):
 
 
 def timer(raw_time):
+    """
+    formats the raw time
+    :param raw_time: raw time
+    :return: time in hours, minutes and seconds
+    """
     hours, rem = divmod(raw_time, 3600)
     minutes, seconds = divmod(rem, 60)
     return "{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds)
 
 def multi_lbl(y):
+    """
+    multilabel binarizer from Scikit-learn
+    :param y: pandas series to be binarized
+    :return: binarized result
+    """
     mlb = MultiLabelBinarizer()
     y = mlb.fit_transform(y)
     return y
@@ -58,6 +69,9 @@ def multi_lbl(y):
 
 
 def matthews_correlation(y_true, y_pred):
+    """
+    External function to calculate MCC
+    """
     y_pred_pos = K.round(K.clip(y_pred, 0, 1))
     y_pred_neg = 1 - y_pred_pos
     y_pos = K.round(K.clip(y_true, 0, 1))
@@ -102,6 +116,9 @@ def recall_k(y_true, y_pred):
 
 
 def f1_score_k(y_true, y_pred):
+    """
+    F1-score metric for keras.
+    """
     # Count positive samples.
     c1 = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
     c2 = K.sum(K.round(K.clip(y_pred, 0, 1)))
@@ -118,6 +135,9 @@ def f1_score_k(y_true, y_pred):
 
 
 def r2_keras(y_true, y_pred):
+    """
+    R2 to be used as metric in keras
+    """
     SS_res =  K.sum(K.square(y_true - y_pred))
     SS_tot = K.sum(K.square(y_true - K.mean(y_true)))
     return ( 1 - SS_res/(SS_tot + K.epsilon()) )
@@ -126,6 +146,9 @@ def r2_keras(y_true, y_pred):
 
 
 def nom_to_num(y):
+    """
+    method for categorizing a nominal variables into integers
+    """
     df = y.copy()
     lb_make = LabelEncoder()
     df_1 = pd.Series(lb_make.fit_transform(df))
@@ -134,6 +157,9 @@ def nom_to_num(y):
 
 
 def normalize_data(exprs):
+    """
+    method for applying normalizing to input data
+    """
     transf = StandardScaler().fit_transform(exprs)
     df = pd.DataFrame(transf, columns = exprs.columns,index = exprs.index)
     return df

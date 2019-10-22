@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
-# from NBHighThroughput import *
 from external_functions import *
 from numpy import *
 from random import choice
@@ -25,6 +23,15 @@ import tensorflow as tf
 import os
 
 class DNN_bin:
+    """
+    This is class is to be used for generating deep learning models for binary classification problems.
+
+    The number of folds to be applied in cross-validation should be inputed in the "cv" argument
+
+    The X and y data can be provided or X_train,X_test,y_train,y_test instead.
+
+    An argument with a batch of hyperparameters can be provided
+    """
     def __init__(self, **kwargs):
         self.X = None
         self.y = None
@@ -37,7 +44,6 @@ class DNN_bin:
         # parameters of selected DNN model
         self.parameters = {
             'dropout': 0.5,
-            # 'output_activation': 'sigmoid',
             'optimization': 'SGD',
             'learning_rate': 0.005,
             'units_in_input_layer': 5000,
@@ -49,28 +55,33 @@ class DNN_bin:
             'batch_normalization': True
         }
         self.filename = None
-        self.verbose = 0
+        self.verbose = 1
         # model selection parameters
-        self.parameters_batch = None
-        # self.parameters_batch = {
-        #     'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-        #     'output_activation': ['sigmoid'],
-        #     'optimization': ['SGD', 'Adam', 'RMSprop'],
-        #     'learning_rate': [0.015, 0.010, 0.005, 0.001],
-        #     'batch_size': [16, 32, 64, 128, 256],
-        #     'nb_epoch': [200],
-        #     'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
-        #                                [2500, 100], [2500, 500]],
-        #     'units_in_input_layer': [5000],
-        #     'early_stopping': [True],
-        #     'patience': [80]
-        # }
+        if "parameters_batch" in kwargs:
+            self.parameters_batch = kwargs["parameters_batch"]
+        else:
+        # self.parameters_batch = None
+            self.parameters_batch = {
+                'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
+                'optimization': ['Adadelta', 'Adam', 'RMSprop', 'SGD'],
+                'learning_rate':  [0.015, 0.010, 0.005, 0.001, 0.0001],
+                'batch_size': [16, 32, 64, 128, 256],
+                'nb_epoch': [100,150,200],
+                'units_in_hidden_layers': [[2048, 1024, 512], [1024, 128], [2048, 1024, 512, 128], [2048, 128, 16],
+                               [2048, 128], [2048, 512]],
+                'units_in_input_layer': [5000],
+                'early_stopping': [True],
+                'batch_normalization': [True, False],
+                'patience': [80]
+            }
         self.model_selection_history = []
-        if len(kwargs.keys()) <= 4:
+        # if len(kwargs.keys()) <= 4:
+        if "X" and "y" in kwargs:
             self.X = kwargs['X']
             self.y = kwargs['y']
             self.splitted = False
-        elif len(kwargs.keys()) >= 5:
+        # elif len(kwargs.keys()) >= 5:
+        elif "X_train" in kwargs:
             self.X_train = kwargs['X_train']
             self.X_test = kwargs['X_test']
             self.y_train = kwargs['y_train']
@@ -84,14 +95,23 @@ class DNN_bin:
             self.feature_number = self.X_train.shape[1]
         elif self.splitted == False:
             self.feature_number = self.X.shape[1]
-        self.parameters_batch = kwargs["parameters_batch"]
+        # self.parameters_batch = kwargs["parameters_batch"]
 
     def print_parameter_values(self):
+        """
+        Prints the hyperparameters used in the DNN
+        :return: None
+        """
         print("Hyperparameters")
         for key in sorted(self.parameters):
             print(key + ": " + str(self.parameters[key]))
 
     def create_DNN_model(self, verbose=True):
+        """
+        Creates a Keras DNN architecture and compiles it
+        :param verbose: If 1 or True it shows the training process
+        :return: None
+        """
         print("Creating DNN model")
         fundamental_parameters = ['dropout', 'optimization', 'learning_rate',
                                   'units_in_input_layer',
@@ -117,21 +137,26 @@ class DNN_bin:
         model.add(Dense(1, activation="sigmoid"))
         if self.parameters['optimization'] == 'SGD':
             optim = SGD(lr = self.parameters['learning_rate'] )
-            # optim.lr.set_value(self.parameters['learning_rate'])
         elif self.parameters['optimization'] == 'RMSprop':
             optim = RMSprop(lr = self.parameters['learning_rate'])
-            # optim.lr.set_value(self.parameters['learning_rate'])
         elif self.parameters['optimization'] == 'Adam':
             optim = Adam()
         elif self.parameters['optimization'] == 'Adadelta':
             optim = Adadelta()
-        model = multi_gpu_model(model,gpus=2)
+        # model = multi_gpu_model(model,gpus=2)
         model.compile(loss='binary_crossentropy', optimizer=optim, metrics=[matthews_correlation])
         if self.verbose == 1: str(model.summary())
         self.model = model
         print("DNN model sucessfully created")
 
     def cv_fit(self, X, y, cv=5):
+        """
+        Performs a cross validation
+        :param X: Dataset with input data
+        :param y: Dataset with output data (labels)
+        :param cv: number of folds to be used in the cv
+        :return: three dictionaries with fitting evaluation scores, fitting history and fitting time
+        """
         if self.parameters['nb_epoch'] and self.parameters['batch_size']:
             self.create_DNN_model()
             init_weights = self.model.get_weights()
@@ -152,6 +177,14 @@ class DNN_bin:
         return cvscores, cvhistory, time_fit
 
     def fit_model(self, X_train, X_test, y_train, y_test):
+        """
+        Model fitting using the given dataset
+        :param X_train: Dataset with input train data
+        :param X_test: Dataset with input test data
+        :param y_train: Dataset with output train data (labels)
+        :param y_test: Dataset with output test data (labels)
+        :return: time spent in the fitting process
+        """
         print("Fitting DNN model")
         start_time = time.time()
         if self.parameters['nb_epoch'] and self.parameters['batch_size']:
@@ -170,7 +203,32 @@ class DNN_bin:
         print("#" * 20)
         return fit_time
 
+    def fit_model_noval(self, X_train, y_train):
+        """
+        Model fitting using the given dataset without validation data
+        :param X_train: Dataset with input train data
+        :param y_train: Dataset with output train data (labels)
+        :return: time spent in the fitting process
+        """
+        print("Fitting DNN model")
+        start_time = time.time()
+        if self.parameters['nb_epoch'] and self.parameters['batch_size']:
+            self.history = self.model.fit(X_train, y_train, epochs=self.parameters['nb_epoch'],
+                                          batch_size=self.parameters['batch_size'],
+                                          verbose=self.verbose)
+        fit_time = time.time() - start_time
+        print("DNN model successfully fit in ", timer(fit_time))
+        print("#" * 20)
+        return fit_time
+
+
     def print_fit_results(self, train_scores, val_scores):
+        """
+        Prints the training and evaluation scores of the model
+        :param train_scores: training scores of the model
+        :param val_scores: evaluation scores of the model
+        :return: None
+        """
         print('val_matthews_correlation: ', val_scores[1])
         print('val_loss: ', val_scores[0])
         print('train_matthews_correlation: ', train_scores[1])
@@ -178,19 +236,27 @@ class DNN_bin:
         print("train/val loss ratio: ", min(self.history.history['loss']) / min(self.history.history['val_loss']))
 
     def predict_values(self,X):
+        """
+        Predicts the output data for a given input data
+        :param X: Dataset with input data
+        :return: Predicted output data
+        """
         y_pred = self.model.predict(X)
         y_pred = [float(np.round(x)) for x in y_pred]
         y_pred = np.ravel(y_pred)
         return y_pred
 
     def evaluate_model(self, X_test, y_test):
+        """
+        Performs model evaluation using different metrics using test data
+        :param X_test: Dataset with test input data
+        :param y_test: Dataset with test output data
+        :return: dictionary with metric scores from the test datasets
+        """
         print("Evaluating model with hold out test set.")
         y_pred = self.model.predict(X_test)
-        # print(y_pred)
         y_pred = [float(np.round(x)) for x in y_pred]
         y_pred = np.ravel(y_pred)
-        # print(y_pred)
-        # print(y_test)
         scores = dict()
         scores['roc_auc'] = roc_auc_score(y_test, y_pred)
         scores['accuracy'] = accuracy_score(y_test, y_pred)
@@ -204,6 +270,11 @@ class DNN_bin:
         return scores
 
     def format_scores_cv(self, scores_cv_list):
+        """
+        Calculates the metric means and standard deviations from a dictionary
+        :param scores_cv_list: dictionary with the metric results of a cross-validation
+        :return: three dictionaries with metric means, standard deviations and raw scores
+        """
         raw_scores = dict.fromkeys(list(scores_cv_list[0].keys()))
         for key, value in raw_scores.items():
             raw_scores[key] = []
@@ -220,6 +291,17 @@ class DNN_bin:
         return mean_scores, sd_scores, raw_scores
 
     def model_selection(self, X, y, n_iter_search=2, n_folds=2):
+        """
+        Test multiple hyperparameter configurations evaluating using cross-validation
+
+        Generates a dictionary with the results of each hyperparameter configuration
+
+        :param X: Dataset with input data
+        :param y: Dataset with output data
+        :param n_iter_search: Number of iterations (number of hyperparameter configurations to test)
+        :param n_folds: Number of folds to be used in the cross-validation process
+        :return: None
+        """
         print("Selecting best DNN model")
         old_parameters = self.parameters.copy()
         self.model_selection_history = []
@@ -238,8 +320,6 @@ class DNN_bin:
             skf = StratifiedKFold(n_splits=n_folds, shuffle=False,)
             for train, valid in skf.split(X, y):
                 print("Running Fold " + str(i + 1) + str("/") + str(n_folds))
-                # print(X)
-                # print(y)
                 X_train, X_valid = X[train], X[valid]
                 y_train, y_valid = y[train], y[valid]
                 self.create_DNN_model()
@@ -275,6 +355,10 @@ class DNN_bin:
         print("Best DNN model successfully selected")
 
     def find_best_model(self):
+        """
+        Selects the model with best performance
+        :return: dictionary with the hyperparameters of the model with best performance, value of the metric used for evaluating model performance
+        """
         if self.model_selection_history:
             best_model = None
             max_val_matthews_correlation = 0
@@ -292,6 +376,10 @@ class DNN_bin:
         return best_model, max_val_matthews_correlation
 
     def select_best_model(self):
+        """
+        Selects the model with best performance and updates the hyperparameter configuration
+        :return: None
+        """
         best_model,max_val = self.find_best_model()
         for key in self.parameters:
             self.parameters[key] = best_model[key]
@@ -300,15 +388,33 @@ class DNN_bin:
         print("Matthews correlation: " + str(max_val))
 
     def batch_parameter_shufller(self):
+        """
+        Creates a dictionary with a random choice of hyperaparameters
+        :return: dictionary with random hyperparameters
+        """
         chosen_param = {}
         for key in self.parameters_batch:
             chosen_param[key] = choice(self.parameters_batch[key])
         return chosen_param
 
     def set_filename(self,filename):
+        """
+        Changes the name of the file
+        :param filename: new name of the file
+        :return: None
+        """
         self.filename = filename
 
     def plot_model_performance(self, cv_history, root_dir, file_name, save_fig=True, show_plot=False):
+        """
+        Creates a plot showing the a metric value and the loss in different number of epoch during fitting
+        :param cv_history: dictionary with metric scores from cross-validation
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :param save_fig: boolean true if the plot is to be saved
+        :param show_plot: boolean true if the plot is to be shown
+        :return: None
+        """
         # summarize history for loss
         ## Plotting the loss with the number of iterations
         fig = plt.figure(figsize=(20, 15))
@@ -342,6 +448,12 @@ class DNN_bin:
         if show_plot: plt.show()
 
     def write_model_selection_results(self, root_dir, file_name):
+        """
+        Writes a csv with the model selection cross-validation results
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         d = self.model_selection_history
         sequence = ['mean_val_matthews_correlation', 'mean_val_loss', 'mean_train_matthews_correlation',
                     'mean_train_loss', 'mean_time_fit']
@@ -362,6 +474,13 @@ class DNN_bin:
         self.model_selection_results = df
 
     def write_report(self, scores, root_dir, file_name):
+        """
+        Writes a txt report with evaluation results of the model
+        :param scores: dictionary with evaluation results
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -391,6 +510,15 @@ class DNN_bin:
 
 
     def write_report_cv(self, mean_scores, sd_scores, raw_scores, root_dir, file_name):
+        """
+        Writes a txt report with cross-validation results of the model
+        :param mean_scores: dictionary with mean of the cross-validation results
+        :param sd_scores: dictionary with the standard deviations of the cross-valiation results
+        :param raw_scores: dictionary with the raw scores of the cross-validation results
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -422,6 +550,10 @@ class DNN_bin:
         print("Report files successfully written.")
 
     def save_best_model(self):
+        """
+        Saves the model with best performance in json and HDF5 files
+        :return: None
+        """
         print("Saving the best model")
         i = 0
         while os.path.exists("best_DNN_models/" + "DNN_bin" + str(i) + '.json'):
@@ -439,6 +571,11 @@ class DNN_bin:
         print("Saved model to disk")
 
     def load_model(self,filename):
+        """
+        Loads a model using the json and a HDF5 file
+        :param filename: name of the model to be loaded
+        :return: None
+        """
         file_name_model = "best_DNN_models\\" + filename + '.json'
         file_name_weights = "best_DNN_models\\" + filename + '.h5'
         print("Loading model from: " + file_name_model)
@@ -453,6 +590,22 @@ class DNN_bin:
 
     def model_fit_results(self, dropout, optimization, learning_rate, units_in_input_layer,
                   units_in_hidden_layers, nb_epoch, batch_size, early_stopping, patience, root_dir, file_name, cv):
+        """
+        Fits a model using a given set of hyperparameters and evaluates the model performance
+        :param dropout: dropout rate to be used in the layers
+        :param optimization: optimizer to be used in the DNN
+        :param learning_rate: learning rate to be used by the optimizer
+        :param units_in_input_layer: Number of units of the input layer
+        :param units_in_hidden_layers: Number of units of the hidden layers
+        :param nb_epoch: number of epochs to be used in the fitting
+        :param batch_size: batch size to be used in the fitting
+        :param early_stopping: boolean True if early stopping to be considered
+        :param patience: number of epochs to tolerate before early stopping
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :param cv: number of folds to be used in the cross-validation
+        :return: None
+        """
         self.parameters = {
 
             'dropout': dropout,
@@ -475,24 +628,41 @@ class DNN_bin:
         del self.model
 
     def multi_model_selection(self, root_dir, experiment_designation, n_iter=10, cv=5):
+        """
+        Performs a random hyperparameters optimization with cross-validation, selects and evaluates the model with best hyperparameter configuration
+
+        To be used when train and test matrices are used to create the instance
+
+        :param root_dir: directory where the results will be saved
+        :param experiment_designation: base name of the files to be stored
+        :param n_iter: number of iterations to be executed in random search in the hyperparameter optimization
+        :param cv: number of folds to be used in the cross-validation
+        :return: None
+        """
         file_name = experiment_designation
         self.model_selection(self.X_train.values, self.y_train.values, n_iter, cv)
-        # self.model_selection(self.X_train, self.y_train, n_iter, cv)
         self.write_model_selection_results(root_dir, file_name)
         self.select_best_model()
         self.create_DNN_model()
-        # cv_scores, cv_history, time_fit = self.cv_fit(self.X_test.values, self.y_test.values, cv)
-        # cv_scores, cv_history, time_fit = self.cv_fit(self.X_test, self.y_test, cv)
-        # self.plot_model_performance(cv_history, root_dir, file_name)
-        # mean_scores, sd_scores, raw_scores = self.format_scores_cv(cv_scores)
-        # self.write_report_cv(mean_scores, sd_scores, raw_scores, root_dir, file_name)
-        X_train,X_valid,y_train,y_valid = train_test_split(self.X_train,self.y_train,test_size=0.25,stratify=self.y_train)
-        self.fit_model(X_train=X_train.values, X_test=X_valid.values,y_train=y_train.values, y_test=y_valid.values)
+        # X_train,X_valid,y_train,y_valid = train_test_split(self.X_train,self.y_train,test_size=0.25,stratify=self.y_train)
+        # self.fit_model(X_train=X_train.values, X_test=X_valid.values,y_train=y_train.values, y_test=y_valid.values)
+        self.fit_model_noval(X_train=self.X_train.values, y_train=self.y_train.values)
         scores = self.evaluate_model(X_test= self.X_test.values,y_test= self.y_test.values)
         self.write_report(scores,root_dir,experiment_designation)
         self.save_best_model()
 
     def multi_model_selection_cv(self, root_dir, experiment_designation, n_iter=100, cv=10):
+        """
+        Performs a random hyperparameters optimization with cross-validation, selects and evaluates the model with best hyperparameter configuration
+
+        To be used when the whole dataset is used for fitting
+
+        :param root_dir: directory where the results will be saved
+        :param experiment_designation: base name of the files to be stored
+        :param n_iter: number of iterations to be executed in random search in the hyperparameter optimization
+        :param cv: number of folds to be used in the cross-validation
+        :return: None
+        """
         file_name = experiment_designation
         self.model_selection(self.X.values, self.y.values, n_iter, cv)
         self.write_model_selection_results(root_dir, file_name)

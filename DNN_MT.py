@@ -5,15 +5,14 @@ from random import choice
 import matplotlib
 matplotlib.use('Agg')
 import time
-import matplotlib.pyplot as plt
 from keras.models import Model
-from keras.layers import Dense, Dropout, BatchNormalization, Input
+from keras.layers import Dense, Dropout, Input
 from keras.models import model_from_json
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD, RMSprop, Adadelta, Adam
 from keras.utils import multi_gpu_model
 from keras.callbacks import EarlyStopping
-from sklearn.model_selection import StratifiedKFold, train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import roc_auc_score, accuracy_score, f1_score, matthews_corrcoef, r2_score, precision_score, recall_score, \
     log_loss, mean_squared_error, mean_absolute_error
 import os
@@ -22,6 +21,18 @@ from keras import backend as K
 
 
 class DNN_MT:
+    """
+    This is class is to be used for generating deep learning models for multi-task classification problems.
+
+    The number of folds to be applied in cross-validation should be inputed in the "cv" argument
+
+    The X and y data can be provided or X_train,X_test,y_train,y_test instead.
+
+    An argument with a batch of hyperparameters can be provided
+
+    the argument "labels" must be given as a list of column names
+    the argument "type" must be given as a list ordered by the problem type of each label
+    """
     def __init__(self, **kwargs):
         self.X = None
         self.y = None
@@ -46,28 +57,32 @@ class DNN_MT:
             'batch_normalization': True
         }
         self.filename = None
-        self.verbose = 0
+        self.verbose = 1
         # model selection parameters
-        self.parameters_batch = None
-        # self.parameters_batch = {
-        #     'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-        #     'output_activation': ['sigmoid'],
-        #     'optimization': ['SGD', 'Adam', 'RMSprop'],
-        #     'learning_rate': [0.015, 0.010, 0.005, 0.001],
-        #     'batch_size': [16, 32, 64, 128, 256],
-        #     'nb_epoch': [200],
-        #     'units_in_hidden_layers': [[2500, 1000, 500], [1000, 100], [2500, 1000, 500, 100], [2500, 100, 10],
-        #                                [2500, 100], [2500, 500]],
-        #     'units_in_input_layer': [5000],
-        #     'early_stopping': [True],
-        #     'patience': [80]
-        # }
+        if "parameters_batch" in kwargs:
+            self.parameters_batch = kwargs["parameters_batch"]
+        else:
+            # self.parameters_batch = None
+            self.parameters_batch = {
+                'dropout': [0, 0.1, 0.2, 0.3, 0.4, 0.5],
+                'optimization': ['Adadelta', 'Adam', 'RMSprop', 'SGD'],
+                'learning_rate': [0.015, 0.010, 0.005, 0.001, 0.0001],
+                'batch_size': [16, 32, 64, 128, 256],
+                'nb_epoch': [100, 150, 200],
+                'units_in_hidden_layers': [[2048, 1024, 512], [1024, 128], [2048, 1024, 512, 128], [2048, 128, 16],
+                                           [2048, 128], [2048, 512]],
+                'units_in_input_layer': [5000],
+                'early_stopping': [True],
+                'batch_normalization': [True, False],
+                'patience': [80]
+            }
         self.model_selection_history = []
-        if len(kwargs.keys()) <= 6:
+        if "X" and "y" in kwargs:
             self.X = kwargs['X']
             self.y = kwargs['y']
             self.splitted = False
-        elif len(kwargs.keys()) >= 7:
+        # elif len(kwargs.keys()) >= 5:
+        elif "X_train" in kwargs:
             self.X_train = kwargs['X_train']
             self.X_test = kwargs['X_test']
             self.y_train = kwargs['y_train']
@@ -81,50 +96,35 @@ class DNN_MT:
             self.feature_number = self.X_train.shape[1]
         elif self.splitted == False:
             self.feature_number = self.X.shape[1]
-        self.parameters_batch = kwargs["parameters_batch"]
+        # self.parameters_batch = kwargs["parameters_batch"]
         self.types = kwargs["types"]
         self.loss_weights = None
         self.labels = kwargs["labels"]
         self.labels_number = len(self.labels)
 
-    # def multiple_y(self,labels):
-    #     if self.splitted == True:
-    #         self.y_train_list = []
-    #         self.y_test_list = []
-    #     elif self.splitted == False:
-    #         self.y_list = []
-    #     self.insert_labels(labels)
-    #     for i in range(self.labels_number):
-    #         if self.splitted == True:
-    #             end_train = self.y_train.iloc[:,i]
-    #             end_test = self.y_test.iloc[:,i]
-    #             self.y_train_list.append(end_train)
-    #             self.y_test_list.append(end_test)
-    #         elif self.splitted == False:
-    #             end = self.y.iloc[:,i]
-    #             self.y_list.append(end)
-
     def insert_labels(self,labels):
+        """
+        Changes the list with the names of the columns with labels
+        :param labels: list with the names of the columns with labels
+        :return: None
+        """
         self.labels = labels
         self.labels_number = len(labels)
 
     def insert_loss_weights(self,loss_weights):
+        """
+        Inserts or changes the weighs that each loss function has in the fitting process
+        :param loss_weights: list with loss weights
+        :return: None
+        """
         self.loss_weights = loss_weights
 
-    # def generate_y_dicts(self):
-    #     if self.splitted == True:
-    #         self.y_trains = {}
-    #         self.y_tests = {}
-    #         for output,y in self.output_list,self.y_train_list:
-    #             self.y_trains[output] = y
-    #         for output, y in self.output_list, self.y_test_list:
-    #             self.y_tests[output] = y
-    #     elif self.splitted == False:
-    #         self.y_s = {}
-    #         for output,y in zip(self.output_list,self.y_list):
-    #             self.y_s[output] = y
 
-    def create_DNN_model(self, print_model=True):
+    def create_DNN_model(self):
+        """
+        Creates a Keras DNN architecture and compiles it
+        :return: None
+        """
         print("Creating DNN model")
         fundamental_parameters = ['dropout', 'optimization', 'learning_rate',
                                   'units_in_input_layer',
@@ -135,7 +135,6 @@ class DNN_MT:
                 return
         self.print_parameter_values()
         # Input layer
-        # input = Input(shape=(self.parameters['units_in_input_layer'],),name = "inputs")
         input = Input(shape=(self.feature_number,), name = "inputs")
         # constructing all hidden layers
         for units,i in zip(self.parameters['units_in_hidden_layers'],range(len(self.parameters['units_in_hidden_layers']))):
@@ -167,22 +166,6 @@ class DNN_MT:
             output_dict[output_name] = Dense(units, activation=output_activation, name=output_name)(x)
             output_list.append(output_name)
 
-        #
-        # for output in enumerate(self.parameters["output_activation"]):
-        #     if self.parameters['types'][output[0]] == "bin":
-        #         units = 1
-        #     elif self.parameters['types'][output[0]] == "multi":
-        #         if self.splitted == True:
-        #             units = len(self.y_train[output[0]].unique())
-        #         elif self.splitted == False:
-        #             units = len(self.y[output[0]].unique())
-        #     elif self.parameters['types'][output[0]] == "reg":
-        #         units = 1
-        #     output_name = self.labels[output[0]] + "_output"
-        #     # constructing the final layer - Multi task DNN.
-        #     output_dict[output_name] = Dense(units, activation= output[1], name = output_name)(x)
-        #     output_list.append(output_name)
-
         loss_types = {"bin":"binary_crossentropy", "multi":"sparse_categorical_crossentropy","reg": "mean_squared_error"}
         metric_types = {"bin":"accuracy","multi": "accuracy","reg":r2_keras}
         metrics_dict = {}
@@ -204,21 +187,32 @@ class DNN_MT:
 
         model = Model(outputs = list(output_dict.values()),input=[input])
         if self.loss_weights != None:
-            model = multi_gpu_model(model, gpus=2)
             model.compile(optimizer=optim, loss=list(loss_dict.values()), metrics=list(metrics_dict.values()),loss_weights=self.loss_weights)
         else:
-            model = multi_gpu_model(model, gpus=2)
             model.compile(optimizer=optim, loss = list(loss_dict.values()),metrics = list(metrics_dict.values()))
         if self.verbose == 1: str(model.summary())
         self.model = model
         print("DNN model sucessfully created")
 
     def print_parameter_values(self):
+        """
+        Prints the hyperparameters used in the DNN
+        :return: None
+        """
         print("Hyperparameters")
         for key in sorted(self.parameters):
             print(key + ": " + str(self.parameters[key]))
 
     def write_cv_results(self,cv_means,cv_std,cv_results,root_dir, file_name):
+        """
+        Writes a txt report and a csv report with cross-validation results of the model
+        :param cv_means: dictionary with mean of the cross-validation results
+        :param cv_std: dictionary with the standard deviations of the cross-valiation results
+        :param cv_results: dictionary with the raw scores of the cross-validation results
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -257,6 +251,13 @@ class DNN_MT:
         print("Report files successfully written.")
 
     def write_hold_out_results(self,scores,root_dir, file_name):
+        """
+        Writes a txt report hold-out results of the model
+        :param scores: dictionary with results of the different metrics
+        :param root_dir: name of the directory where the results will be stored
+        :param file_name: name of the file to be stored
+        :return: None
+        """
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
         i = 0
@@ -285,7 +286,6 @@ class DNN_MT:
             out.write("\n")
             for metric in scores.keys():
                 if end in metric:
-                    # print(str(end) + ": " + str(scores[metric]))
                     out.write(str(metric) + ": " + str(scores[metric]))
                     out.write('\n')
             out.write("\n")
@@ -294,6 +294,14 @@ class DNN_MT:
 
 
     def fit_model(self, X_train, X_test, y_train, y_test):
+        """
+        Model fitting using the given dataset
+        :param X_train: Dataset with input train data
+        :param X_test: Dataset with input test data
+        :param y_train: Dataset with output train data (labels)
+        :param y_test: Dataset with output test data (labels)
+        :return: time spent in the fitting process
+        """
         print("Fitting DNN model")
         start_time = time.time()
         if self.parameters['nb_epoch'] and self.parameters['batch_size']:
@@ -311,45 +319,43 @@ class DNN_MT:
         print("DNN model successfully fit in ", timer(fit_time))
         return fit_time
 
-    # def print_fit_results(self, train_scores, val_scores):
-    #     for score in range(self.labels_number):
-    #         print("Metrics for label" + " " + self.labels[score])
-    #         print('val_accuracy: ', val_scores[self.labels[score]])
-    #         # print('val_loss: ', val_scores[0])
-    #         print('train_accuracy: ', train_scores[self.labels[score]])
-    #         # print('train_loss: ', train_scores[0])
-    #         print("train/val loss ratio: ", min(self.history.history['loss']) / min(self.history.history['val_loss']))
-
-    def predict_values(self,X):
-        y_pred = self.model.predict(X)
-        # y_pred = [float(np.round(x)) for x in y_pred]
-        # y_pred = np.ravel(y_pred)
-        return y_pred
+    def fit_model_noval(self, X_train, y_train):
+        """
+        Model fitting using the given dataset without validation data
+        :param X_train: Dataset with input train data
+        :param y_train: Dataset with output train data (labels)
+        :return: time spent in the fitting process
+        """
+        print("Fitting DNN model")
+        start_time = time.time()
+        if self.parameters['nb_epoch'] and self.parameters['batch_size']:
+            self.history = self.model.fit(X_train, y_train, epochs=self.parameters['nb_epoch'],
+                                          batch_size=self.parameters['batch_size'],
+                                          verbose=self.verbose)
+        fit_time = time.time() - start_time
+        print("DNN model successfully fit in ", timer(fit_time))
+        print("#" * 20)
+        return fit_time
 
     def evaluate_model_selection(self, X_test, y_test):
+        """
+        Performs model evaluation for using during model selection
+        :param X_test: Dataset with input test data
+        :param y_test: Dataset with output test data (labels)
+        :return: dictionary with evaluation results
+        """
         # print("Evaluating model with hold out test set.")
         y_pred = self.model.predict(X_test)
-        # y_pred = [float(np.round(x)) for x in y_pred]
-        # y_pred = np.ravel(y_pred)
         scores = dict()
         for i in range(self.labels_number):
             if self.types[i] == "bin":
                 y_pred_v1 = [float(np.round(x)) for x in y_pred[i]]
                 y_pred_v2 = np.ravel(y_pred_v1)
                 scores[str(self.labels[i])] = accuracy_score(y_test[i], y_pred_v2)
-                # scores[str(self.labels[i]) + "_log_loss"] = log_loss(y_test[i], y_pred_v2)
             elif self.types[i]  == "multi":
                 y_pred_v1 = [int(np.argmax(x)) for x in y_pred[i]]
-                # y_pred = [float(np.round(x)) for x in y_pred]
                 y_pred_v2 = np.ravel(y_pred_v1)
-                # scores['roc_auc'] = roc_auc_score(y_test, y_pred)
                 scores[str(self.labels[i])] = accuracy_score(y_test[i], y_pred_v2)
-                # scores[str(self.labels[i]) + "_log_loss"] = log_loss(y_test[i], y_pred[i], labels = np.unique(y_test[i]))
-                # scores['f1_score'] = f1_score(y_test, y_pred)
-                # scores['mcc'] = matthews_corrcoef(y_test, y_pred)
-                # scores['precision'] = precision_score(y_test, y_pred)
-                # scores['recall'] = recall_score(y_test, y_pred)
-                # scores['log_loss'] = log_loss(y_test, y_pred)
             elif self.types[i] == "reg":
                 scores[str(self.labels[i])] = r2_score(y_test[i], y_pred[i])
         for metric, score in scores.items():
@@ -357,10 +363,14 @@ class DNN_MT:
         return scores
 
     def evaluate_model(self, X_test, y_test):
+        """
+        Performs model evaluation with multiple metrics
+        :param X_test: Dataset with input test data
+        :param y_test: Dataset with output test data (labels)
+        :return: dictionary with evaluation results
+        """
         # print("Evaluating model with hold out test set.")
         y_pred = self.model.predict(X_test)
-        # y_pred = [float(np.round(x)) for x in y_pred]
-        # y_pred = np.ravel(y_pred)
         scores = dict()
         for i in range(self.labels_number):
             if self.types[i] == "bin":
@@ -375,9 +385,7 @@ class DNN_MT:
                 scores[str(self.labels[i]) + "_log_loss"] = log_loss(y_test[i], y_pred_v2)
             elif self.types[i]  == "multi":
                 y_pred_v1 = [int(np.argmax(x)) for x in y_pred[i]]
-                # y_pred = [float(np.round(x)) for x in y_pred]
                 y_pred_v2 = np.ravel(y_pred_v1)
-                # scores['roc_auc'] = roc_auc_score(y_test, y_pred)
                 scores[str(self.labels[i]) + "_accuracy"] = accuracy_score(y_test[i], y_pred_v2)
                 scores[str(self.labels[i]) + "_f1_score"] = f1_score(y_test[i], y_pred_v2,average="weighted")
                 scores[str(self.labels[i]) + "_mcc"] = matthews_corrcoef(y_test[i], y_pred_v2)
@@ -392,12 +400,20 @@ class DNN_MT:
         return scores
 
     def batch_parameter_shufller(self):
+        """
+        Creates a dictionary with a random choice of hyperaparameters
+        :return: dictionary with random hyperparameters
+        """
         chosen_param = {}
         for key in self.parameters_batch:
             chosen_param[key] = choice(self.parameters_batch[key])
         return chosen_param
 
     def set_new_parameters(self):
+        """
+        Sets a random set of hyperaparameters selected by batch_parameter_shufller
+        :return: None
+        """
         new_parameters = self.batch_parameter_shufller()
         dnn_parameters = {}
         for key in new_parameters:
@@ -405,6 +421,11 @@ class DNN_MT:
         self.parameters = dnn_parameters
 
     def y_splitter(self,y):
+        """
+        Separates the different types of labels and returns a list of lists
+        :param y: group of different types of labels to be separated
+        :return: a list of lists of different types of labels
+        """
         y_list = []
         for i in range(y.shape[1]):
             y_list.append(y[:,i])
@@ -412,6 +433,14 @@ class DNN_MT:
 
 
     def hold_out_fit(self,X_train,X_valid,y_train,y_valid):
+        """
+        Model fitting and evaluation using an hold out technique
+        :param X_train: Dataset with input train data
+        :param X_test: Dataset with input test data
+        :param y_train: Dataset with output train data (labels)
+        :param y_test: Dataset with output test data (labels)
+        :return: dictionary with train and valid scores of hold out evaluation
+        """
         res = {}
         self.create_DNN_model()
         y_train_splt = self.y_splitter(y_train.values)
@@ -427,10 +456,25 @@ class DNN_MT:
         return res
 
     def fold_generator(self,n_folds,X):
+        """
+        Generate index to create folds for the cross validation
+        :param n_folds: Number of folds to be created
+        :param X: Dataset with input data
+        :return: object to be used as folds in  the cross-validation
+        """
         skf = KFold(n_splits=n_folds,shuffle=True)
         return skf.split(X)
 
     def cv_fit(self,X,y,n_folds = 3,shuffle = True,kf= None):
+        """
+        Performs a cross validation
+        :param X: Dataset with input data
+        :param y: Dataset with output data (labels)
+        :param cv: number of folds to be used in the cv
+        :param shuffle: boolean True if folds creation should be made randomly
+        :param kf: object for the fold generation
+        :return: three dictionaries with fitting evaluation scores means, standard deviations and raw results
+        """
         # self.set_new_parameters()
         if kf == None:
             skf = KFold(n_splits=n_folds, shuffle=shuffle)
@@ -446,19 +490,12 @@ class DNN_MT:
         for train, valid in kf:
             print("#" * 35)
             print("Running Fold " + str(i + 1) + str("/") + str(n_folds))
-            # print(X)
-            # print(y)
             X_train, X_valid = X.values[train], X.values[valid]
             y_train, y_valid = y.values[train], y.values[valid]
-            # print(y_train)
-            # print(y_valid)
             y_train_splt = self.y_splitter(y_train)
             y_valid_splt = self.y_splitter(y_valid)
-            # print(y_train_splt)
             self.model.set_weights(init_weights)
             self.fit_model(X_train, X_valid, y_train_splt, y_valid_splt)
-            # print(self.model.loss_functions)
-            # print(self.model.metrics)
             print("Train scores:")
             train_scores = self.evaluate_model_selection(X_train, y_train_splt)
             print("Validation scores:")
@@ -466,10 +503,6 @@ class DNN_MT:
             train_scores_kf.append(train_scores)
             valid_scores_kf.append(valid_scores)
             i += 1
-        # print(self.model.loss_functions)
-        # print(self.model.metrics)
-        # print(train_scores_kf)
-        # print(valid_scores_kf)
         for label in self.labels:
             train_scores_list = []
             valid_scores_list = []
@@ -484,6 +517,15 @@ class DNN_MT:
         return cv_means,cv_std,cv_results
 
     def cv_fit_results(self,X,y,n_folds = 3,shuffle = True,kf= None):
+        """
+        Performs a cross validation
+        :param X: Dataset with input data
+        :param y: Dataset with output data (labels)
+        :param cv: number of folds to be used in the cv
+        :param shuffle: boolean True if folds creation should be made randomly
+        :param kf: object for the fold generation
+        :return: a dictionary with cross validation results
+        """
         # self.set_new_parameters()
         if kf == None:
             skf = KFold(n_splits=n_folds, shuffle=shuffle)
@@ -495,19 +537,12 @@ class DNN_MT:
         for train, valid in kf:
             print("#" * 35)
             print("Running Fold " + str(i + 1) + str("/") + str(n_folds))
-            # print(X)
-            # print(y)
             X_train, X_valid = X.values[train], X.values[valid]
             y_train, y_valid = y.values[train], y.values[valid]
-            # print(y_train)
-            # print(y_valid)
             y_train_splt = self.y_splitter(y_train)
             y_valid_splt = self.y_splitter(y_valid)
-            # print(y_train_splt)
             self.model.set_weights(init_weights)
             self.fit_model(X_train, X_valid, y_train_splt, y_valid_splt)
-            # print(self.model.loss_functions)
-            # print(self.model.metrics)
             print("Validation scores:")
             valid_scores = self.evaluate_model(X_valid, y_valid_splt)
             valid_scores_kf.append(valid_scores)
@@ -522,11 +557,14 @@ class DNN_MT:
                             cv_results[metric].append(fold[metric])
                         else:
                             cv_results[metric] = [fold[metric]]
-
-        # print(cv_results)
         return cv_results
 
     def format_cv_results(self,cv_results):
+        """
+        Calculates the metric means and standard deviations from a dictionary
+        :param cv_results: dictionary with the metric results of a cross-validation
+        :return: two dictionaries with metric means and standard deviations, respectively
+        """
         cv_means = {}
         cv_sd = {}
         for key in cv_results.keys():
@@ -536,6 +574,17 @@ class DNN_MT:
 
 
     def model_selection(self,X,y,n_iter=2,cv=3):
+        """
+        Test multiple hyperparameter configurations evaluating using cross-validation
+
+        Generates a dictionary with the results of each hyperparameter configuration
+
+        :param X: Dataset with input data
+        :param y: Dataset with output data
+        :param n_iter_search: Number of iterations (number of hyperparameter configurations to test)
+        :param n_folds: Number of folds to be used in the cross-validation process
+        :return: None
+        """
         print("Selecting best DNN model")
         old_parameters = self.parameters.copy()
         self.model_selection_history = []
@@ -568,13 +617,16 @@ class DNN_MT:
         print("Best DNN model successfully selected")
 
     def find_best_model(self):
+        """
+        Selects the model with best performance
+        :return: dictionary with the hyperparameters of the model with best performance, value of the metric used for evaluating model performance
+        """
         if self.model_selection_history:
             best_model = None
             max_val_score= 0
             for dic in self.model_selection_history:
                 valid_values = []
                 for key in dic:
-                    # if "val" in key:
                     if "valid_score_mean" in key:
                         valid_values.append(dic[key])
                 val_score = np.mean(valid_values)
@@ -587,13 +639,16 @@ class DNN_MT:
         return best_model
 
     def select_best_model(self):
+        """
+        Selects the model with best performance and updates the hyperparameter configuration
+        :return: None
+        """
         best_model = self.find_best_model()
         for key in self.parameters:
             if key in best_model.keys():
                 self.parameters[key] = best_model[key]
         valid_values = []
         for key in best_model:
-            # if "val" in key:
             if "valid_score_mean" in key:
                 valid_values.append(best_model[key])
         val_score = np.mean(valid_values)
@@ -602,14 +657,26 @@ class DNN_MT:
         print("Average_val_score:" + str(val_score))
 
     def multi_model_selection(self,root_dir, file_name,n_iter=2,cv=2):
+        """
+        Performs a random hyperparameters optimization with cross-validation, selects and evaluates the model with best hyperparameter configuration
+
+        To be used when train and test matrices are used to create the instance
+
+        :param root_dir: directory where the results will be saved
+        :param experiment_designation: base name of the files to be stored
+        :param n_iter: number of iterations to be executed in random search in the hyperparameter optimization
+        :param cv: number of folds to be used in the cross-validation
+        :return: None
+        """
         self.model_selection(self.X_train,self.y_train,n_iter=n_iter,cv=cv)
         self.select_best_model()
         self.create_DNN_model()
-        X_train_f,X_valid,y_train_f,y_valid = train_test_split(self.X_train,self.y_train,test_size=0.3,shuffle=True)
-        y_train_splt = self.y_splitter(y_train_f.values)
-        y_valid_splt = self.y_splitter(y_valid.values)
+        # X_train_f,X_valid,y_train_f,y_valid = train_test_split(self.X_train,self.y_train,test_size=0.3,shuffle=True)
+        y_train_splt = self.y_splitter(self.y_train.values)
+        # y_valid_splt = self.y_splitter(y_valid.values)
         y_test_splt = self.y_splitter(self.y_test.values)
-        self.fit_model(X_train_f,X_valid,y_train_splt,y_valid_splt)
+        # self.fit_model(X_train_f,X_valid,y_train_splt,y_valid_splt)
+        self.fit_model_noval(X_train=self.X_train,y_train=y_train_splt)
         print("#" * 20)
         print("Train test results: ")
         scores = self.evaluate_model(self.X_test,y_test_splt)
@@ -618,13 +685,21 @@ class DNN_MT:
         self.save_best_model()
 
     def multi_model_selection_cv(self,root_dir, file_name,n_iter=2,cv=2):
+        """
+        Performs a random hyperparameters optimization with cross-validation, selects and evaluates the model with best hyperparameter configuration
+
+        To be used when the whole dataset is used for fitting
+
+        :param root_dir: directory where the results will be saved
+        :param experiment_designation: base name of the files to be stored
+        :param n_iter: number of iterations to be executed in random search in the hyperparameter optimization
+        :param cv: number of folds to be used in the cross-validation
+        :return: None
+        """
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=0.3,shuffle=True)
-        # X_train_v2,X_valid,y_train_v2,y_valid = train_test_split(X_train,y_train,test_size=0.1,shuffle=True)
-        # kf_folds = self.fold_generator(cv,X_train)
         self.model_selection(X_train,y_train,n_iter=n_iter,cv=cv)
         self.select_best_model()
         self.create_DNN_model()
-        # cv_means,cv_std,cv_results = self.cv_fit(self.X,self.y,self.cv)
         cv_results = self.cv_fit_results(self.X,self.y,self.cv)
         cv_means,cv_std = self.format_cv_results(cv_results)
         self.write_cv_results(cv_means,cv_std,cv_results,root_dir, file_name)
@@ -632,6 +707,10 @@ class DNN_MT:
 
 
     def save_best_model(self):
+        """
+        Saves the model with best performance in json and HDF5 files
+        :return: None
+        """
         print("Saving the best model")
         i = 0
         while os.path.exists("best_DNN_models/" + "DNN_mt" + str(i) + '.json'):
@@ -649,6 +728,11 @@ class DNN_MT:
         print("Saved model to disk")
 
     def load_model(self,filename):
+        """
+        Loads a model using the json and a HDF5 file
+        :param filename: name of the model to be loaded
+        :return: None
+        """
         file_name_model = "best_DNN_models\\" + filename + '.json'
         file_name_weights = "best_DNN_models\\" + filename + '.h5'
         print("Loading model from: " + file_name_model)
